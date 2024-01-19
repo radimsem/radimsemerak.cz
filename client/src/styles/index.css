@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+    .nav-link {
+        @apply flex flex-col items-center gap-1 text-slate-200
+    }
+    .nav-icon-figure {
+        @apply px-4 py-1 rounded-full transition-colors group-hover/nav-item:bg-slate-500
+    }
+
+    .main-sec {
+        @apply space-y-8 lg:px-[10%] xl:px-[15%]
+    }
+    .icon-text {
+        @apply flex flex-row items-center gap-1.5
+    }
+    .heading {
+        @apply font-semibold text-slate-200
+    }
+}
+
+:root {
+    --color-primary-gradient-from: #41d1ff;
+    --color-primary-gradient-to: #a058fe;
+}
+
+* {
+    @apply scroll-smooth
+}
+
+p {
+    @apply leading-relaxed
+}
+
+p a {
+    @apply text-sky-500 underline
+}
+
+.highlight {
+    background: linear-gradient(
+        120deg, 
+        var(--color-primary-gradient-from),
+        var(--color-primary-gradient-to)
+    );
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}

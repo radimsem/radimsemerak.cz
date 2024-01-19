@@ -1,0 +1,37 @@
+{
+	"name": "semerak",
+	"version": "0.0.1",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+	},
+	"devDependencies": {
+		"@fontsource/fira-mono": "^4.5.10",
+		"@iconify/svelte": "^3.1.6",
+		"@neoconfetti/svelte": "^1.0.0",
+		"@sveltejs/adapter-auto": "^3.1.0",
+		"@sveltejs/kit": "^2.0.6",
+		"@sveltejs/vite-plugin-svelte": "^3.0.1",
+		"autoprefixer": "^10.4.16",
+		"postcss": "^8.4.32",
+		"svelte": "^4.2.8",
+		"svelte-check": "^3.6.2",
+		"svelte-headless-table": "^0.18.1",
+		"tailwindcss": "^3.4.0",
+		"tslib": "^2.6.2",
+		"typescript": "^5.3.3",
+		"vite": "^5.0.10"
+	},
+	"type": "module",
+	"dependencies": {
+		"@material/web": "^1.1.1",
+		"bits-ui": "^0.13.2",
+		"clsx": "^2.1.0",
+		"radix-icons-svelte": "^1.2.1",
+		"tailwind-merge": "^2.2.0",
+		"tailwind-variants": "^0.1.20"
+	}
+}

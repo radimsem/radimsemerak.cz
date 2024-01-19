@@ -1,0 +1,20 @@
+[package]
+name = "semerak"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+jsonwebtoken = "9"
+anyhow = "1.0.79"
+axum = "0.7.4"
+dotenv = "0.15.0"
+serde = { version = "1.0.195", features = ["derive"] }
+tokio = { version = "1.35.1", features = ["full"] }
+tower = "0.4.13"
+diesel = { version = "2.1.4", features = ["postgres", "chrono"] }
+chrono = "0.4.31"
+diesel_cli = { version = "2.1.1", default-features = false, features = ["postgres"] }
+percent-encoding = "2.3.1"
+async-io = "2.3.0"
