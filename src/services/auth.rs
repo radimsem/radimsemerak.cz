@@ -1,11 +1,11 @@
 use std::env;
 
+use anyhow::anyhow;
 use async_io::Timer;
 use axum::extract::State;
 use axum::{Json, http::StatusCode};
 use chrono::{Local, Duration, NaiveDateTime};
-use diesel::{ExpressionMethods, RunQueryDsl};
-use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
+use diesel::{ExpressionMethods, RunQueryDsl, prelude::*};
 use jsonwebtoken::{encode, Header, Algorithm, EncodingKey};
 use serde::{Deserialize, Serialize};
 
@@ -97,9 +97,8 @@ pub async fn validate_token(State(AppState { data }): State<AppState>, Json(toke
 }
 
 pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>) -> Result<(), AppError> {
-    let mut db = data.lock().unwrap();
     let tokens: Vec<(i32, NaiveDateTime)> = tokens::table.select((tokens::id, tokens::expires))
-        .load(&mut db.conn)?;
+        .load(&mut data.lock().unwrap().conn)?;
 
     if tokens.len() > 0 {
         for (id, expiration) in tokens {
@@ -108,10 +107,17 @@ pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>)
             if curr < expiration {
                 let left = expiration - curr;
                 let timer = Timer::after(std::time::Duration::from_secs(left.num_seconds().try_into()?));
+                let db = data.clone();
 
                 tokio::task::spawn(async move {
                     timer.await;
-                    let _ = diesel::delete(tokens::table.filter(tokens::id.eq(id)));
+
+                    let result = diesel::delete(tokens::table.filter(tokens::id.eq(id)))
+                        .execute(&mut db.lock().unwrap().conn);
+
+                    if let Err(err) = result {
+                        return Err(anyhow!("Could not delete token {id}: {err}")).unwrap()
+                    }
                 });
             }
         }

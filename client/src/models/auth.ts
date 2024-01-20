@@ -5,5 +5,5 @@ type LoginRequest = {
 
 type LoginResponse = {
     token?: string
-    errMsg?: string
+    err?: string
 }
