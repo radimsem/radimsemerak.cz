@@ -13,9 +13,11 @@
                 </h2>
                 <h3>Overview</h3>
             </div>
-            <md-filled-button class="text-[.95rem]">
-                <a href="/">See web</a>
-            </md-filled-button>
+            <a href="/" target="_blank">
+                <md-filled-button class="text-[.95rem]">
+                    See web
+                </md-filled-button>
+            </a>
         </header>
     
         <main>

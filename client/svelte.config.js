@@ -14,6 +14,12 @@ const config = {
 		adapter: adapter(),
 		alias: {
 			"@/*": "./path/to/lib/*"
+		},
+		csp: {
+			mode: "hash",
+			directives: {
+				"script-src": ['self']
+			}
 		}
 	}
 };

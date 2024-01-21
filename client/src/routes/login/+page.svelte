@@ -1,4 +1,6 @@
 <script lang="ts">
+    import type { ActionData } from './$types';
+
     // components
     import * as Card from '$lib/components/ui/card';
 
@@ -7,6 +9,8 @@
 
     // icons
     import Icon from '@iconify/svelte';
+
+    export let form: ActionData;
 
     let showPass = false;
 </script>
@@ -28,6 +32,9 @@
                     method="post"
                     class="flex flex-col gap-3"
                 >
+                    {#if form?.err}
+                         <p class="text-red-500">{form.err}</p>
+                    {/if}
                     <fieldset class="flex flex-col gap-1">
                         <label for="username" class="text-sm text-slate-300">
                             Username
@@ -54,17 +61,16 @@
                                 required
                                 class="px-3 py-2.5 text-slate-300 bg-[rgb(18,24,27)] bg-opacity-75 placeholder:text-slate-500 rounded-[.5rem] outline-none transition-colors focus:bg-opacity-100"
                             >
-                            <button
-                                on:click={(e) => {
-                                    e.preventDefault();
-                                    showPass = !showPass
-                                }}
+                            <!-- svelte-ignore a11y-click-events-have-key-events -->
+                            <!-- svelte-ignore a11y-no-static-element-interactions -->
+                            <span
+                                on:click={() => showPass = !showPass}
                                 class="cursor-pointer absolute top-1/2 right-3 -translate-y-1/2 text-sky-500"
                             >
                                 <Icon 
                                     icon={showPass ? "mdi:eye" : "mdi:eye-off"}
                                 />
-                            </button>
+                            </span>
                         </div>
                     </fieldset>
                     <md-filled-button type class="text-[.95rem] mt-1.5 py-3">

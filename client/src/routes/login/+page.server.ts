@@ -1,6 +1,6 @@
 import { redirect } from "@sveltejs/kit";
+import type { Actions } from "./$types";
 
-/** @type {import('./$types').Actions} */
 export const actions = {
     login: async ({ request }) => {
         const data = await request.formData();
@@ -14,13 +14,12 @@ export const actions = {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(loginReq)
         });
-        // const loginRes = await res.json();
-        console.log(res);
+        const loginRes: LoginResponse = await res.json();
 
-        // if (loginRes.token) {
-        //     throw redirect(301, "/admin");
-        // } else {
-        //     console.error(loginRes.err);
-        // }
+        if (loginRes.token) {
+            throw redirect(301, "/admin");
+        } else {
+            return { err: loginRes.err }
+        }
     }
-};
+} satisfies Actions;

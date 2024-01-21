@@ -79,24 +79,30 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
     ))
 }
 
-pub async fn validate_token(State(AppState { data }): State<AppState>, Json(token_content): Json<String>) -> Result<Json<TokenValidationResponse>, AppError> {
+pub async fn validate_token(State(AppState { data }): State<AppState>, Json(token_content): Json<String>) -> Result<(StatusCode, Json<TokenValidationResponse>), AppError> {
     let result: Vec<String> = tokens::table.select(tokens::content)
         .filter(tokens::content.eq(token_content))
         .load(&mut data.lock().unwrap().conn)?;
 
     match result.get(usize::default()) {
-        Some(_) => Ok(Json(TokenValidationResponse {
-            validated: true,
-            err: None
-        })),
-        None => Ok(Json(TokenValidationResponse {
-            validated: false,
-            err: Some("There is no valid token at the moment!".to_string())
-        }))
+        Some(_) => Ok((
+            StatusCode::OK,
+            Json(TokenValidationResponse {
+                validated: true,
+                err: None
+            }
+        ))),
+        None => Ok((
+            StatusCode::NOT_FOUND,
+            Json(TokenValidationResponse {
+                validated: false,
+                err: Some("There is no valid token at the moment!".to_string())
+            }
+        )))
     }
 }
 
-pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>) -> Result<(), AppError> {
+pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>) -> Result<(StatusCode, ()), AppError> {
     let tokens: Vec<(i32, NaiveDateTime)> = tokens::table.select((tokens::id, tokens::expires))
         .load(&mut data.lock().unwrap().conn)?;
 
@@ -123,5 +129,5 @@ pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>)
         }
     }
     
-    Ok(())
+    Ok((StatusCode::OK, ()))
 }
