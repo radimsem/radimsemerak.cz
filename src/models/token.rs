@@ -2,7 +2,7 @@ use diesel::prelude::*;
 use chrono::NaiveDateTime;
 
 #[derive(Debug, Queryable, Selectable, Insertable)]
-#[diesel(table_name = crate::models::schema::tokens)]
+#[diesel(table_name = crate::schema::tokens)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Token {
     pub content: String,

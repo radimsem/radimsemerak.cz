@@ -10,9 +10,9 @@ use jsonwebtoken::{encode, Header, Algorithm, EncodingKey};
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
-use crate::models::models::Token;
+use crate::models::token::Token;
 use crate::error::AppError;
-use crate::models::schema::tokens;
+use crate::schema::tokens;
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
@@ -53,7 +53,7 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
     }
 
     let content = encode(
-        &Header::new(Algorithm::RS256),
+        &Header::new(Algorithm::default()),
         &Claims { sub: env::var("JWT_SUBJECT")?, company: username },
         &EncodingKey::from_secret(env::var("JWT_SECRET")?.as_ref())
     )?;

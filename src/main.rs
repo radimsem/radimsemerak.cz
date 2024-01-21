@@ -2,6 +2,7 @@ mod models;
 mod repository;
 mod services;
 mod error;
+mod schema;
 
 use std::sync::{Arc, Mutex};
 use std::{env, error::Error};

@@ -17,4 +17,3 @@ impl Database {
         Ok(Self { conn })
     }
 }
-
