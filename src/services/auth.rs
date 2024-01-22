@@ -27,7 +27,6 @@ pub struct LoginResponse {
 }
 
 #[derive(Serialize)]
-
 pub struct TokenResponse {
     content: String,
     expires: i64
@@ -102,8 +101,8 @@ pub async fn validate_token(State(AppState { data }): State<AppState>, Json(clie
         )))
     }
 
-    let mut decodes: Vec<TokenData<Claims>> = Vec::with_capacity(tokens.capacity());
     tokens.push(client);
+    let mut decodes: Vec<TokenData<Claims>> = Vec::with_capacity(tokens.capacity());
     for token in tokens {
         decodes.push(
             decode::<Claims>(
