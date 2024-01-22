@@ -1,8 +1,8 @@
-import { redirect } from "@sveltejs/kit";
+import { json, redirect } from "@sveltejs/kit";
 import type { Actions } from "./$types";
 
 export const actions = {
-    login: async ({ request }) => {
+    login: async ({ request, cookies }) => {
         const data = await request.formData();
         const loginReq: LoginRequest = {
             username: data.get("username") as string,
@@ -14,12 +14,20 @@ export const actions = {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(loginReq)
         });
-        const loginRes: LoginResponse = await res.json();
 
+        if (!res.ok) {
+            return { err: await res.text() };
+        }
+        
+        const loginRes: LoginResponse = await res.json();
         if (loginRes.token) {
-            throw redirect(301, "/admin");
+            let expires = new Date();
+            expires.setTime(loginRes.token.expires);
+
+            cookies.set("token", loginRes.token.content, { path: "/", expires });
+            redirect(301, "/admin");
         } else {
-            return { err: loginRes.err }
+            return { err: loginRes.err };
         }
     }
 } satisfies Actions;

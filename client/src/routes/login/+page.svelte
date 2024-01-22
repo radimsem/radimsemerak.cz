@@ -17,7 +17,7 @@
 
 <main class="relative">
     <section class="flex justify-center items-center w-full h-screen">
-        <Card.Root class="space-y-2 px-2 pb-3 bg-[rgb(32,39,55)] bg-opacity-50 border-none">
+        <Card.Root class="space-y-2 {form?.err && "space-y-0"} px-2 pb-3 bg-[rgb(32,39,55)] bg-opacity-50 border-none">
             <Card.Header class="items-center">
                 <img 
                     src={logo} 
@@ -33,7 +33,7 @@
                     class="flex flex-col gap-3"
                 >
                     {#if form?.err}
-                         <p class="text-red-500">{form.err}</p>
+                         <p class="text-center text-red-500">{form.err}</p>
                     {/if}
                     <fieldset class="flex flex-col gap-1">
                         <label for="username" class="text-sm text-slate-300">

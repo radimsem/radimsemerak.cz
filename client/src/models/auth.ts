@@ -4,6 +4,14 @@ type LoginRequest = {
 }
 
 type LoginResponse = {
-    token?: string
+    token?: {
+        content: string,
+        expires: number
+    }
+    err?: string
+}
+
+type TokenValidationReponse = {
+    validated: boolean,
     err?: string
 }

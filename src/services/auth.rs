@@ -6,7 +6,7 @@ use axum::extract::State;
 use axum::{Json, http::StatusCode};
 use chrono::{Local, Duration, NaiveDateTime};
 use diesel::{ExpressionMethods, RunQueryDsl, prelude::*};
-use jsonwebtoken::{encode, Header, Algorithm, EncodingKey};
+use jsonwebtoken::{encode, Header, Algorithm, EncodingKey, decode, DecodingKey, Validation, TokenData};
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
@@ -22,8 +22,15 @@ pub struct LoginRequest {
 
 #[derive(Serialize)]
 pub struct LoginResponse {
-    token: Option<String>,
+    token: Option<TokenResponse>,
     err: Option<String>
+}
+
+#[derive(Serialize)]
+
+pub struct TokenResponse {
+    content: String,
+    expires: i64
 }
 
 #[derive(Serialize)]
@@ -32,10 +39,10 @@ pub struct TokenValidationResponse {
     err: Option<String>
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 struct Claims {
     sub: String,
-    company: String,
+    company: String
 }
 
 pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<(StatusCode, Json<LoginResponse>), AppError> {
@@ -59,10 +66,12 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
     )?;
 
     let curr = Local::now().naive_local();
+    let exp = curr + Duration::hours(env::var("TOKEN_EXPIRATION_HOURS")?.parse()?);
+    let time = exp.timestamp();
     let token = Token {
         content,
         created_at: curr,
-        expires: curr + Duration::hours(env::var("TOKEN_EXPIRATION_HOURS")?.parse()?)
+        expires: exp
     };
 
     let content = diesel::insert_into(tokens::table)
@@ -73,26 +82,18 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
     Ok((
         StatusCode::CREATED,
         Json(LoginResponse {
-            token: Some(content),
+            token: Some(TokenResponse { content, expires: time }),
             err: None
         })
     ))
 }
 
-pub async fn validate_token(State(AppState { data }): State<AppState>, Json(token_content): Json<String>) -> Result<(StatusCode, Json<TokenValidationResponse>), AppError> {
-    let result: Vec<String> = tokens::table.select(tokens::content)
-        .filter(tokens::content.eq(token_content))
-        .load(&mut data.lock().unwrap().conn)?;
-
-    match result.get(usize::default()) {
-        Some(_) => Ok((
-            StatusCode::OK,
-            Json(TokenValidationResponse {
-                validated: true,
-                err: None
-            }
-        ))),
-        None => Ok((
+pub async fn validate_token(State(AppState { data }): State<AppState>, Json(client): Json<String>) -> Result<(StatusCode, Json<TokenValidationResponse>), AppError> {
+    let mut tokens: Vec<String> = tokens::table.select(tokens::content)
+        .load::<String>(&mut data.lock().unwrap().conn)?;
+    
+    if tokens.len() == 0 {
+        return Ok((
             StatusCode::NOT_FOUND,
             Json(TokenValidationResponse {
                 validated: false,
@@ -100,6 +101,37 @@ pub async fn validate_token(State(AppState { data }): State<AppState>, Json(toke
             }
         )))
     }
+
+    let mut decodes: Vec<TokenData<Claims>> = Vec::with_capacity(tokens.capacity());
+    tokens.push(client);
+    for token in tokens {
+        decodes.push(
+            decode::<Claims>(
+                token.as_str(), 
+                &DecodingKey::from_secret(env::var("JWT_SECRET")?.as_ref()), 
+                &Validation::new(Algorithm::default())
+            )?
+        );
+    }
+
+    let len = decodes.len();
+    if !decodes[0..len - 2].iter().any(|token| token.claims == decodes[len - 1].claims) {
+        return Ok((
+            StatusCode::UNAUTHORIZED,
+            Json(TokenValidationResponse {
+                validated: false,
+                err: Some("The token does not match any other on the server!".to_string())
+            }
+        )))
+    }
+
+    Ok((
+        StatusCode::OK,
+        Json(TokenValidationResponse {
+            validated: true,
+            err: None
+        }
+    )))
 }
 
 pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>) -> Result<(StatusCode, ()), AppError> {
