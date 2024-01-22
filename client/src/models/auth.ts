@@ -3,12 +3,20 @@ type LoginRequest = {
     pw: string
 }
 
+type TokenResponse = {
+    id: number,
+    content: string,
+    expires: number
+}
+
 type LoginResponse = {
-    token?: {
-        content: string,
-        expires: number
-    }
+    token?: TokenResponse,
     err?: string
+}
+
+type TokenValidationRequest = {
+    id: number,
+    client: string
 }
 
 type TokenValidationReponse = {

@@ -5,13 +5,14 @@ use async_io::Timer;
 use axum::extract::State;
 use axum::{Json, http::StatusCode};
 use chrono::{Local, Duration, NaiveDateTime};
+use diesel::query_dsl::methods::FilterDsl;
 use diesel::{ExpressionMethods, RunQueryDsl, prelude::*};
-use jsonwebtoken::{encode, Header, Algorithm, EncodingKey, decode, DecodingKey, Validation, TokenData};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
-use crate::models::token::Token;
 use crate::error::AppError;
+use crate::models::token::Token;
 use crate::schema::tokens;
 
 #[derive(Deserialize)]
@@ -28,8 +29,15 @@ pub struct LoginResponse {
 
 #[derive(Serialize)]
 pub struct TokenResponse {
+    id: i32,
     content: String,
     expires: i64
+}
+
+#[derive(Deserialize)]
+pub struct TokenValidationRequest {
+    id: i32,
+    client: String
 }
 
 #[derive(Serialize)]
@@ -44,7 +52,19 @@ struct Claims {
     company: String
 }
 
-pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<(StatusCode, Json<LoginResponse>), AppError> {
+pub struct TokensEncodeHandler {
+    client: String,
+    server: String
+}
+
+struct TokensDecodeHandler {
+    client: TokenData<Claims>,
+    server: TokenData<Claims>
+}
+
+type AppDataResponse<T> = (StatusCode, Json<T>);
+
+pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<AppDataResponse<LoginResponse>, AppError> {
     if 
         username != env::var("ADMIN_USERNAME")? ||
         pw       != env::var("ADMIN_PASSWORD")?
@@ -73,64 +93,55 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
         expires: exp
     };
 
-    let content = diesel::insert_into(tokens::table)
+    let (id, content) = diesel::insert_into(tokens::table)
         .values(&token)
-        .returning(tokens::content)
-        .get_result::<String>(&mut data.lock().unwrap().conn)?;
+        .returning((tokens::id, tokens::content))
+        .get_result::<(i32, String)>(&mut data.lock().unwrap().conn)?;
         
     Ok((
         StatusCode::CREATED,
         Json(LoginResponse {
-            token: Some(TokenResponse { content, expires: time }),
+            token: Some(TokenResponse { id, content, expires: time }),
             err: None
         })
     ))
 }
 
-pub async fn validate_token(State(AppState { data }): State<AppState>, Json(client): Json<String>) -> Result<(StatusCode, Json<TokenValidationResponse>), AppError> {
-    let mut tokens: Vec<String> = tokens::table.select(tokens::content)
-        .load::<String>(&mut data.lock().unwrap().conn)?;
-    
-    if tokens.len() == 0 {
-        return Ok((
+pub async fn validate_token(State(AppState { data }): State<AppState>, Json(TokenValidationRequest { id, client }): Json<TokenValidationRequest>) -> Result<AppDataResponse<TokenValidationResponse>, AppError> {
+    let token: Option<String> = tokens::table
+        .find(id)
+        .select(tokens::content)
+        .first::<String>(&mut data.lock().unwrap().conn)
+        .optional()?;
+
+    match token {
+        Some(server) => {
+            if !is_valid(TokensEncodeHandler { client, server })? {
+                return Ok((
+                    StatusCode::UNAUTHORIZED,
+                    Json(TokenValidationResponse {
+                        validated: false,
+                        err: Some("Token is invalid!".to_string())
+                    }
+                )))
+            }
+
+            Ok((
+                StatusCode::OK,
+                Json(TokenValidationResponse {
+                    validated: true,
+                    err: None
+                }
+            )))
+        },
+        None => Ok((
             StatusCode::NOT_FOUND,
             Json(TokenValidationResponse {
                 validated: false,
-                err: Some("There is no valid token at the moment!".to_string())
+                err: Some(format!("There are is not any valid token with id {id}"))
             }
         )))
     }
-
-    tokens.push(client);
-    let mut decodes: Vec<TokenData<Claims>> = Vec::with_capacity(tokens.capacity());
-    for token in tokens {
-        decodes.push(
-            decode::<Claims>(
-                token.as_str(), 
-                &DecodingKey::from_secret(env::var("JWT_SECRET")?.as_ref()), 
-                &Validation::new(Algorithm::default())
-            )?
-        );
-    }
-
-    let len = decodes.len();
-    if !decodes[0..len - 2].iter().any(|token| token.claims == decodes[len - 1].claims) {
-        return Ok((
-            StatusCode::UNAUTHORIZED,
-            Json(TokenValidationResponse {
-                validated: false,
-                err: Some("The token does not match any other on the server!".to_string())
-            }
-        )))
-    }
-
-    Ok((
-        StatusCode::OK,
-        Json(TokenValidationResponse {
-            validated: true,
-            err: None
-        }
-    )))
 }
 
 pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>) -> Result<(StatusCode, ()), AppError> {
@@ -149,7 +160,7 @@ pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>)
                 tokio::task::spawn(async move {
                     timer.await;
 
-                    let result = diesel::delete(tokens::table.filter(tokens::id.eq(id)))
+                    let result = diesel::delete(FilterDsl::filter(tokens::table, tokens::id.eq(id)))
                         .execute(&mut db.lock().unwrap().conn);
 
                     if let Err(err) = result {
@@ -161,4 +172,26 @@ pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>)
     }
     
     Ok((StatusCode::OK, ()))
+}
+
+fn is_valid(encode_handler: TokensEncodeHandler) -> anyhow::Result<bool> {
+    let decode_handler = TokensDecodeHandler {
+        client: handle_decode(encode_handler.client)?,
+        server: handle_decode(encode_handler.server)?
+    };
+
+    if decode_handler.client.claims != decode_handler.server.claims {
+        return Ok(false)
+    }
+
+    Ok(true)
+}
+
+fn handle_decode(token: String) -> anyhow::Result<TokenData<Claims>> {
+    let result = decode(
+        token.as_str(),
+        &DecodingKey::from_secret(env::var("JWT_SECRET")?.as_ref()),
+        &Validation::new(Algorithm::default())
+    )?;
+    Ok(result)
 }

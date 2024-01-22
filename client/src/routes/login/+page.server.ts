@@ -24,7 +24,7 @@ export const actions = {
             let expires = new Date();
             expires.setTime(loginRes.token.expires);
 
-            cookies.set("token", loginRes.token.content, { path: "/", expires });
+            cookies.set("token", `id=${loginRes.token.id};content=${loginRes.token.content}`, { path: '/', expires });
             redirect(301, "/admin");
         } else {
             return { err: loginRes.err };

@@ -1,22 +1,12 @@
-mod models;
-mod repository;
-mod services;
-mod error;
-mod schema;
-
 use std::sync::{Arc, Mutex};
 use std::{env, error::Error};
 
 use axum::{Router, routing::{post, get}};
 use dotenv::dotenv;
 
-use crate::repository::db::Database;
-use crate::services::auth::{login_auth_handler, validate_token, handle_tokens_expiration};
-
-#[derive(Clone)]
-struct AppState {
-    data: Arc<Mutex<Database>>
-}
+use semerak::AppState;
+use semerak::repository::db::Database;
+use semerak::services::auth::{login_auth_handler, validate_token, handle_tokens_expiration};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
