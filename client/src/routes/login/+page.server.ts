@@ -4,7 +4,7 @@ import type { Actions } from "./$types";
 export const actions = {
     login: async ({ request, cookies }) => {
         const data = await request.formData();
-        const loginReq: LoginRequest = {
+        const body: LoginRequest = {
             username: data.get("username") as string,
             pw: data.get("pw") as string
         };
@@ -12,22 +12,17 @@ export const actions = {
         const res = await fetch("http://127.0.0.1:8080/api/login", {
             method: "post",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(loginReq)
+            body: JSON.stringify(body)
         });
 
-        if (!res.ok) {
-            return { err: await res.text() };
-        }
+        if (!res.ok) return { err: await res.text() };
         
-        const loginRes: LoginResponse = await res.json();
-        if (loginRes.token) {
-            let expires = new Date();
-            expires.setTime(loginRes.token.expires);
+        const token: LoginResponse = await res.json();
+        const expires = new Date();
 
-            cookies.set("token", `id=${loginRes.token.id};content=${loginRes.token.content}`, { path: '/', expires });
-            redirect(301, "/admin");
-        } else {
-            return { err: loginRes.err };
-        }
+        expires.setTime(token.expires);
+        cookies.set("token", `${token.id}|${token.content}`, { path: '/' });
+
+        redirect(301, "/admin");
     }
 } satisfies Actions;

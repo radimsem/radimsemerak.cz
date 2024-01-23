@@ -5,23 +5,16 @@ export const load: PageServerLoad = async ({ cookies }) => {
     const token = cookies.get("token");
 
     if (token) {
-        const req = handleTokenValidationRequest(token);
+        const body: TokenValidationRequest = handleTokenValidationRequest(token);
         const res = await fetch("http://127.0.0.1:8080/api/validate", {
             method: "post",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(req)
+            body: JSON.stringify(body)
         });
 
-        if (res.ok) {
-            const tokenValidRes: TokenValidationReponse = await res.json();
-            if (!tokenValidRes?.validated) {
-                if (tokenValidRes?.err) {
-                    handleInvalidToken(tokenValidRes.err);
-                }
-            }
-        } else {
-            handleInvalidToken(await res.text());
-        }
+        if (!res.ok) handleInvalidToken(await res.text());
+    } else {
+        handleInvalidToken("There is no token at the moment!");
     }
 };
 
@@ -31,12 +24,10 @@ function handleInvalidToken(err: string) {
 }
 
 function handleTokenValidationRequest(value: string): TokenValidationRequest {
-    let params = value.split(';');
+    let params = value.split('|');
 
     return {
-        id: parseInt(handleParamValue(params.at(0) as string)),
-        client: handleParamValue(params.at(1) as string)
+        id: parseInt(params.at(0) as string),
+        client: params.at(1) as string
     }
 }
-
-const handleParamValue = (param: string): string => param.split('=').at(1) as string;

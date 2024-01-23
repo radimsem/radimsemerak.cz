@@ -3,23 +3,13 @@ type LoginRequest = {
     pw: string
 }
 
-type TokenResponse = {
+type LoginResponse = {
     id: number,
     content: string,
     expires: number
 }
 
-type LoginResponse = {
-    token?: TokenResponse,
-    err?: string
-}
-
 type TokenValidationRequest = {
     id: number,
     client: string
-}
-
-type TokenValidationReponse = {
-    validated: boolean,
-    err?: string
 }

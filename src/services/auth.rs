@@ -23,12 +23,6 @@ pub struct LoginRequest {
 
 #[derive(Serialize)]
 pub struct LoginResponse {
-    token: Option<TokenResponse>,
-    err: Option<String>
-}
-
-#[derive(Serialize)]
-pub struct TokenResponse {
     id: i32,
     content: String,
     expires: i64
@@ -40,16 +34,11 @@ pub struct TokenValidationRequest {
     client: String
 }
 
-#[derive(Serialize)]
-pub struct TokenValidationResponse {
-    validated: bool,
-    err: Option<String>
-}
-
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 struct Claims {
     sub: String,
-    company: String
+    company: String,
+    expires: i64
 }
 
 pub struct TokensEncodeHandler {
@@ -69,30 +58,26 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
         username != env::var("ADMIN_USERNAME")? ||
         pw       != env::var("ADMIN_PASSWORD")?
     {
-        return Ok((
-            StatusCode::UNAUTHORIZED,
-            Json(LoginResponse {
-                token: None,
-                err: Some("Invalid username or password!".to_string())
-            })
+        return Err(AppError(
+            anyhow!("Invalid username or password!"),
+            StatusCode::UNAUTHORIZED
         ))
     }
 
+    let curr = Local::now().naive_local();
+    let expires = curr + Duration::hours(env::var("TOKEN_EXPIRATION_HOURS")?.parse()?);
+    let time = expires.timestamp();
+
     let content = encode(
         &Header::new(Algorithm::default()),
-        &Claims { sub: env::var("JWT_SUBJECT")?, company: username },
+        &Claims { sub: env::var("JWT_SUBJECT")?, company: username, expires: time.clone() },
         &EncodingKey::from_secret(env::var("JWT_SECRET")?.as_ref())
     )?;
-
-    let curr = Local::now().naive_local();
-    let exp = curr + Duration::hours(env::var("TOKEN_EXPIRATION_HOURS")?.parse()?);
-    let time = exp.timestamp();
     let token = Token {
         content,
         created_at: curr,
-        expires: exp
+        expires
     };
-
     let (id, content) = diesel::insert_into(tokens::table)
         .values(&token)
         .returning((tokens::id, tokens::content))
@@ -101,13 +86,14 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
     Ok((
         StatusCode::CREATED,
         Json(LoginResponse {
-            token: Some(TokenResponse { id, content, expires: time }),
-            err: None
+            id,
+            content,
+            expires: time
         })
     ))
 }
 
-pub async fn validate_token(State(AppState { data }): State<AppState>, Json(TokenValidationRequest { id, client }): Json<TokenValidationRequest>) -> Result<AppDataResponse<TokenValidationResponse>, AppError> {
+pub async fn validate_token(State(AppState { data }): State<AppState>, Json(TokenValidationRequest { id, client }): Json<TokenValidationRequest>) -> Result<(StatusCode, ()), AppError> {
     let token: Option<String> = tokens::table
         .find(id)
         .select(tokens::content)
@@ -116,31 +102,18 @@ pub async fn validate_token(State(AppState { data }): State<AppState>, Json(Toke
 
     match token {
         Some(server) => {
-            if !is_valid(TokensEncodeHandler { client, server })? {
-                return Ok((
-                    StatusCode::UNAUTHORIZED,
-                    Json(TokenValidationResponse {
-                        validated: false,
-                        err: Some("Token is invalid!".to_string())
-                    }
-                )))
+            match is_valid(TokensEncodeHandler { client, server })? {
+                true => Ok((StatusCode::OK, ())),
+                false => Err(AppError(
+                    anyhow!("Token is invalid!"),
+                    StatusCode::UNAUTHORIZED
+                ))
             }
-
-            Ok((
-                StatusCode::OK,
-                Json(TokenValidationResponse {
-                    validated: true,
-                    err: None
-                }
-            )))
         },
-        None => Ok((
-            StatusCode::NOT_FOUND,
-            Json(TokenValidationResponse {
-                validated: false,
-                err: Some(format!("There are is not any valid token with id {id}"))
-            }
-        )))
+        None => Err(AppError(
+            anyhow!("There are is not any valid token with id {id}"),
+            StatusCode::NOT_FOUND
+        ))
     }
 }
 
@@ -160,12 +133,9 @@ pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>)
                 tokio::task::spawn(async move {
                     timer.await;
 
-                    let result = diesel::delete(FilterDsl::filter(tokens::table, tokens::id.eq(id)))
-                        .execute(&mut db.lock().unwrap().conn);
-
-                    if let Err(err) = result {
-                        return Err(anyhow!("Could not delete token {id}: {err}")).unwrap()
-                    }
+                    let _ = diesel::delete(FilterDsl::filter(tokens::table, tokens::id.eq(id)))
+                        .execute(&mut db.lock().unwrap().conn)
+                        .unwrap();
                 });
             }
         }
@@ -180,15 +150,14 @@ fn is_valid(encode_handler: TokensEncodeHandler) -> anyhow::Result<bool> {
         server: handle_decode(encode_handler.server)?
     };
 
-    if decode_handler.client.claims != decode_handler.server.claims {
-        return Ok(false)
+    match decode_handler.client.claims == decode_handler.server.claims {
+        true => Ok(true),
+        false => Ok(false)
     }
-
-    Ok(true)
 }
 
 fn handle_decode(token: String) -> anyhow::Result<TokenData<Claims>> {
-    let result = decode(
+    let result = decode::<Claims>(
         token.as_str(),
         &DecodingKey::from_secret(env::var("JWT_SECRET")?.as_ref()),
         &Validation::new(Algorithm::default())

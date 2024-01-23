@@ -45,7 +45,7 @@
                             name="username"
                             placeholder="Admin username"
                             required
-                            class="px-3 py-2.5 text-slate-300 bg-[rgb(18,24,27)] bg-opacity-75 placeholder:text-slate-500 rounded-[.5rem] outline-none transition-colors focus:bg-opacity-100"
+                            class="admin-input"
                         >
                     </fieldset>
                     <fieldset class="flex flex-col gap-1">
@@ -59,7 +59,7 @@
                                 name="pw"
                                 placeholder="Admin password"
                                 required
-                                class="px-3 py-2.5 text-slate-300 bg-[rgb(18,24,27)] bg-opacity-75 placeholder:text-slate-500 rounded-[.5rem] outline-none transition-colors focus:bg-opacity-100"
+                                class="admin-input"
                             >
                             <!-- svelte-ignore a11y-click-events-have-key-events -->
                             <!-- svelte-ignore a11y-no-static-element-interactions -->
