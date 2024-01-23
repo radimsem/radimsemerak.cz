@@ -1,4 +1,5 @@
 use std::env;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_io::Timer;
@@ -52,6 +53,7 @@ struct TokensDecodeHandler {
 }
 
 type AppDataResponse<T> = (StatusCode, Json<T>);
+type TokenExpirationHandler<T> = tokio::task::JoinHandle<Result<T, AppError>>;
 
 pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<AppDataResponse<LoginResponse>, AppError> {
     if 
@@ -66,11 +68,10 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
 
     let curr = Local::now().naive_local();
     let expires = curr + Duration::hours(env::var("TOKEN_EXPIRATION_HOURS")?.parse()?);
-    let time = expires.timestamp();
 
     let content = encode(
         &Header::new(Algorithm::default()),
-        &Claims { sub: env::var("JWT_SUBJECT")?, company: username, expires: time.clone() },
+        &Claims { sub: env::var("JWT_SUBJECT")?, company: username, expires: expires.timestamp() },
         &EncodingKey::from_secret(env::var("JWT_SECRET")?.as_ref())
     )?;
     let token = Token {
@@ -78,17 +79,17 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
         created_at: curr,
         expires
     };
-    let (id, content) = diesel::insert_into(tokens::table)
+    let (id, content, expires) = diesel::insert_into(tokens::table)
         .values(&token)
-        .returning((tokens::id, tokens::content))
-        .get_result::<(i32, String)>(&mut data.lock().unwrap().conn)?;
+        .returning((tokens::id, tokens::content, tokens::expires))
+        .get_result::<(i32, String, NaiveDateTime)>(&mut data.lock().unwrap().conn)?;
         
     Ok((
         StatusCode::CREATED,
         Json(LoginResponse {
             id,
             content,
-            expires: time
+            expires: expires.timestamp()
         })
     ))
 }
@@ -120,6 +121,7 @@ pub async fn validate_token(State(AppState { data }): State<AppState>, Json(Toke
 pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>) -> Result<(StatusCode, ()), AppError> {
     let tokens: Vec<(i32, NaiveDateTime)> = tokens::table.select((tokens::id, tokens::expires))
         .load(&mut data.lock().unwrap().conn)?;
+    let mut handles: Vec<TokenExpirationHandler<usize>> = Vec::with_capacity(tokens.capacity());
 
     if tokens.len() > 0 {
         for (id, expiration) in tokens {
@@ -128,17 +130,21 @@ pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>)
             if curr < expiration {
                 let left = expiration - curr;
                 let timer = Timer::after(std::time::Duration::from_secs(left.num_seconds().try_into()?));
-                let db = data.clone();
+                let db = Arc::clone(&data);
 
-                tokio::task::spawn(async move {
+                handles.push(tokio::task::spawn(async move {
                     timer.await;
 
-                    let _ = diesel::delete(FilterDsl::filter(tokens::table, tokens::id.eq(id)))
+                    diesel::delete(FilterDsl::filter(tokens::table, tokens::id.eq(id)))
                         .execute(&mut db.lock().unwrap().conn)
-                        .unwrap();
-                });
+                        .map_err(|e| AppError(anyhow!("Could not delete token {id}: {e}"), StatusCode::EXPECTATION_FAILED))
+                }))
             }
         }
+    }
+
+    for handle in handles {
+        if let Err(err) = handle.await? { return Err(err) }
     }
     
     Ok((StatusCode::OK, ()))
