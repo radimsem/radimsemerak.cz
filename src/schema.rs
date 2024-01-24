@@ -8,3 +8,10 @@ diesel::table! {
         expires -> Timestamp,
     }
 }
+
+diesel::table! {
+    projects (id) {
+        id -> Int4,
+        html -> Text,
+    }
+}

@@ -11,7 +11,7 @@ use diesel::{ExpressionMethods, RunQueryDsl, prelude::*};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 
-use crate::AppState;
+use crate::{AppDataResponse, AppState};
 use crate::error::AppError;
 use crate::models::token::Token;
 use crate::schema::tokens;
@@ -52,7 +52,6 @@ struct TokensDecodeHandler {
     server: TokenData<Claims>
 }
 
-type AppDataResponse<T> = (StatusCode, Json<T>);
 type TokenExpirationHandler<T> = tokio::task::JoinHandle<Result<T, AppError>>;
 
 pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<AppDataResponse<LoginResponse>, AppError> {
