@@ -4,10 +4,10 @@ use std::{env, error::Error};
 use axum::{Router, routing::{post, get}};
 use dotenv::dotenv;
 
-use semerak::services::projects::projects_action;
+use semerak::services::projects::{handle_projects_action, get_projects};
 use semerak::AppState;
 use semerak::repository::db::Database;
-use semerak::services::auth::{handle_tokens_expiration, login, verify};
+use semerak::services::auth::{handle_tokens_expiration, handle_login_auth, verify_token};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -19,9 +19,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let state = AppState { data: Arc::new(Mutex::new(db)) };
     let app: Router = Router::new()
-        .route("/api/login", post(login))
-        .route("/api/verify", post(verify))
-        .route("/api/projects/action", post(projects_action))
+        .route("/api/login", post(handle_login_auth))
+        .route("/api/verify", post(verify_token))
+        .route("/api/projects/action", post(handle_projects_action))
+        .route("/api/projects/get", get(get_projects))
         .route("/api/expires", get(handle_tokens_expiration))
         .with_state(state);
     

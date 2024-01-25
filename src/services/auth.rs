@@ -54,7 +54,7 @@ struct TokensDecodeHandler {
 
 type TokenExpirationHandler<T> = tokio::task::JoinHandle<Result<T, AppError>>;
 
-pub async fn login(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<AppDataResponse<LoginResponse>, AppError> {
+pub async fn handle_login_auth(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<AppDataResponse<LoginResponse>, AppError> {
     if 
         username != env::var("ADMIN_USERNAME")? ||
         pw       != env::var("ADMIN_PASSWORD")?
@@ -93,7 +93,7 @@ pub async fn login(State(AppState { data }): State<AppState>, Json(LoginRequest 
     ))
 }
 
-pub async fn verify(State(AppState { data }): State<AppState>, Json(TokenValidationRequest { id, client }): Json<TokenValidationRequest>) -> Result<(StatusCode, ()), AppError> {
+pub async fn verify_token(State(AppState { data }): State<AppState>, Json(TokenValidationRequest { id, client }): Json<TokenValidationRequest>) -> Result<(StatusCode, ()), AppError> {
     let token: Option<String> = tokens::table
         .find(id)
         .select(tokens::content)
@@ -118,7 +118,8 @@ pub async fn verify(State(AppState { data }): State<AppState>, Json(TokenValidat
 }
 
 pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>) -> Result<(StatusCode, ()), AppError> {
-    let tokens: Vec<(i32, NaiveDateTime)> = tokens::table.select((tokens::id, tokens::expires))
+    let tokens: Vec<(i32, NaiveDateTime)> = tokens::table
+        .select((tokens::id, tokens::expires))
         .load(&mut data.lock().unwrap().conn)?;
     let mut handles: Vec<TokenExpirationHandler<usize>> = Vec::with_capacity(tokens.capacity());
 

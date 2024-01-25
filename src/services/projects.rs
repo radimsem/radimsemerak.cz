@@ -1,11 +1,12 @@
 use std::{io::Write, path::PathBuf, sync::{Arc, Mutex}};
 
 use anyhow::anyhow;
-use axum::{extract::{State, Multipart}, http::StatusCode};
-use diesel::{query_dsl::methods::FilterDsl, ExpressionMethods, RunQueryDsl};
+use axum::{extract::{State, Multipart}, http::StatusCode, Json};
+use diesel::{query_dsl::methods::{FilterDsl, SelectDsl}, ExpressionMethods, RunQueryDsl};
+use serde::Serialize;
 use tempfile::NamedTempFile;
 
-use crate::{error::AppError, models::project::Project, repository::db::Database, schema::projects, AppState};
+use crate::{error::AppError, models::project::Project, repository::db::Database, schema::projects, AppDataResponse, AppState};
 use crate::services::parser::MdParser;
 
 #[derive(Default)]
@@ -27,7 +28,19 @@ enum IdentifierAction {
     DELETE
 }
 
-pub async fn projects_action(State(AppState { data }): State<AppState>, mut multipart: Multipart) -> Result<(StatusCode, ()), AppError> {
+#[derive(Serialize)]
+pub struct ProjectResponse {
+    id: i32,
+    html: String
+}
+
+impl From<(i32, String)> for ProjectResponse {
+    fn from((id, html): (i32, String)) -> Self {
+        Self { id, html }
+    }
+}
+
+pub async fn handle_projects_action(State(AppState { data }): State<AppState>, mut multipart: Multipart) -> Result<(StatusCode, ()), AppError> {
     let mut req = DataRequest::default();
     let mut idn = IdentifierRequest::default();
 
@@ -66,6 +79,20 @@ pub async fn projects_action(State(AppState { data }): State<AppState>, mut mult
     handle_action(&data, req)?;
 
     Ok((StatusCode::OK, ()))
+}
+
+pub async fn get_projects(State(AppState { data }): State<AppState>) -> Result<AppDataResponse<Vec<ProjectResponse>>, AppError> {
+    let projects: Vec<ProjectResponse> = projects::table
+        .select((projects::id, projects::html))
+        .load::<(i32, String)>(&mut data.lock().unwrap().conn)?
+        .into_iter()
+        .map(|(id, html)| ProjectResponse { id, html })
+        .collect();
+    
+    Ok((
+        StatusCode::OK,
+        Json(projects)
+    ))
 }
 
 fn handle_action(data: &Arc<Mutex<Database>>, body: DataRequest) -> Result<(), AppError> {
