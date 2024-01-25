@@ -178,16 +178,6 @@
             Its 'write once, run anywhere' capability makes it versatile for a wide range of applications, 
             from enterprise-scale applications to embedded systems.
         </p>
-        <h3 class="text-xl heading">
-            Node.js
-        </h3>
-        <p>
-            Lastly, Node, a runtime environment for executing JavaScript outside of a web browser, is widely used for building scalable network applications. 
-            It leverages the V8 JavaScript engine, which compiles JavaScript code into machine code.
-        </p>
-        <p>
-            Node.js is event-driven, non-blocking, and perfect for real-time applications due to its streaming capabilities and single-threaded nature.
-        </p>
     </article>
 </section>
 

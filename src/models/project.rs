@@ -1,5 +1,4 @@
 use diesel::prelude::*;
-use chrono::NaiveDateTime;
 
 #[derive(Debug, Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::schema::projects)]

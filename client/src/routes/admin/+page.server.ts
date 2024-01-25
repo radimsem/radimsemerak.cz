@@ -6,7 +6,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 
     if (token) {
         const body: TokenValidationRequest = handleTokenValidationRequest(token);
-        const res = await fetch("http://127.0.0.1:8080/api/validate", {
+        const res = await fetch("http://127.0.0.1:8080/api/verify", {
             method: "post",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)

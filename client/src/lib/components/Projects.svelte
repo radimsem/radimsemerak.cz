@@ -1,6 +1,6 @@
 <script lang="ts">
     // components
-    import * as Card from '$lib/components/ui/card';
+    // import * as Card from '$lib/components/ui/card';
 </script>
 
 <section id="projects" class="main-sec">
@@ -15,7 +15,7 @@
         </p>
     </article>
     <section class="grid grid-cols-1 gap-8 md:grid-cols-2 xl:grid-cols-3">
-        <a href="#projects">
+        <!-- <a href="#projects">
             <Card.Root class="h-full space-y-6 p-0 pb-3 bg-[rgb(32,39,55)] border-none transition-transform duration-300 hover:-translate-y-2">
                 <Card.Header class="p-0">
                     <img 
@@ -27,16 +27,14 @@
                 </Card.Header>
                 <Card.Content class="space-y-4 px-5">
                     <Card.Title class="text-xl text-slate-200">
-                        Hust: a SSG from Markdown files written in Rust
+                        Example
                     </Card.Title>
                     <Card.Description class="text-base">
-                        Hust is a static site generator similar to <a href="https://gohugo.io/" target="_blank">Hugo</a>, but it's written in Rust. 
-                        It allows you to convert Markdown files into static HTML websites. 
-                        With Hust, you can create blogs, documentation, and other types of websites with ease...
+                        ...
                     </Card.Description>
                 </Card.Content>
             </Card.Root>
-        </a>
+        </a> -->
     </section>
 </section>
 

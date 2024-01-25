@@ -1,57 +1,103 @@
-use std::{fs::File, path::PathBuf};
+use std::{io::Write, path::PathBuf, sync::{Arc, Mutex}};
 
 use anyhow::anyhow;
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::{State, Multipart}, http::StatusCode};
 use diesel::{query_dsl::methods::FilterDsl, ExpressionMethods, RunQueryDsl};
+use tempfile::NamedTempFile;
 
-use crate::{error::AppError, models::project::Project, schema::projects, AppState};
+use crate::{error::AppError, models::project::Project, repository::db::Database, schema::projects, AppState};
+use crate::services::parser::MdParser;
 
-use super::parser::MdParser;
-
-pub struct Request {
-    id: Option<IdentifierRequest>,
-    file: Option<File>
+#[derive(Default)]
+struct DataRequest {
+    idn: Option<IdentifierRequest>,
+    file: Option<NamedTempFile>,
 }
 
+#[derive(Default, PartialEq)]
 struct IdentifierRequest {
     id: i32,
-    job: IdentifierJob
+    action: IdentifierAction
 }
 
-enum IdentifierJob {
+#[derive(Default, PartialEq)]
+enum IdentifierAction {
+    #[default]
     UPDATE,
     DELETE
 }
 
-async fn projects_handler(State(AppState { data }): State<AppState>, Json(req): Json<Request>) -> Result<(StatusCode, ()), AppError> {
-    match req.id {
-        Some(idn) => match idn.job {
-            IdentifierJob::UPDATE => {
-                let html = validate_file(&req.file)?;
+pub async fn projects_action(State(AppState { data }): State<AppState>, mut multipart: Multipart) -> Result<(StatusCode, ()), AppError> {
+    let mut req = DataRequest::default();
+    let mut idn = IdentifierRequest::default();
+
+    while let Some(field) = multipart.next_field().await? {
+        let name = field.name().unwrap_or_else(|| "").to_string();
+        let bytes = field.bytes().await?;
+
+        match name.as_str() {
+            "file" => {
+                let mut file = NamedTempFile::new()?;
+                file.write_all(&bytes)?;
+                req.file = Some(file);
+            },
+            "id" => idn.id = serde_json::from_slice::<i32>(&bytes)?,
+            "action" => {
+                let action = serde_json::from_slice::<String>(&bytes)?;
+                idn.action = match action.as_str() {
+                    "update" => IdentifierAction::UPDATE,
+                    "delete" => IdentifierAction::DELETE,
+                    &_ => return Err(AppError(
+                        anyhow!("Unexpected action {action}!"),
+                        StatusCode::EXPECTATION_FAILED
+                    ))
+                }
+            },
+            &_ => return Err(AppError(
+                anyhow!("Unexpected field with name {name}!"),
+                StatusCode::EXPECTATION_FAILED
+            ))
+        }
+    }
+
+    if idn != IdentifierRequest::default() {
+        req.idn = Some(idn);
+    }
+    handle_action(&data, req)?;
+
+    Ok((StatusCode::OK, ()))
+}
+
+fn handle_action(data: &Arc<Mutex<Database>>, body: DataRequest) -> Result<(), AppError> {
+    match body.idn {
+        Some(idn) => match idn.action {
+            IdentifierAction::UPDATE => {
+                let html = validate_file(&body.file)?;
                 diesel::update(projects::table.filter(projects::id.eq(idn.id)))
                     .set(projects::html.eq(html))
                     .execute(&mut data.lock().unwrap().conn)?;
             },
-            IdentifierJob::DELETE => {
+            IdentifierAction::DELETE => {
                 diesel::delete(FilterDsl::filter(projects::table, projects::id.eq(idn.id)))
                     .execute(&mut data.lock().unwrap().conn)?;
             }
         },
         None => {
-            let html = validate_file(&req.file)?;
+            let html = validate_file(&body.file)?;
             diesel::insert_into(projects::table)
                 .values(&Project { html })
                 .execute(&mut data.lock().unwrap().conn)?;
         }
     }
 
-    Ok((StatusCode::OK, ()))
+    Ok(())
 }
 
-fn validate_file(file: &Option<File>) -> Result<String, AppError> {
+fn validate_file(file: &Option<NamedTempFile>) -> Result<String, AppError> {
     match file {
         Some(source) => {
-            let data = source.metadata()?;
+            let file = source.as_file();
+            let data = file.metadata()?;
             let path = filename::file_name(source)?;
 
             if !data.file_type().is_file() {
@@ -64,7 +110,7 @@ fn validate_file(file: &Option<File>) -> Result<String, AppError> {
                 Some(ext) => {
                     if ext != "md" {
                         return Err(AppError(
-                            anyhow!("File's extension {:?} is not 'md'!", ext),
+                            anyhow!("File's extension {:?} is not a Markdown file!", ext),
                             StatusCode::NOT_ACCEPTABLE
                         ))
                     }

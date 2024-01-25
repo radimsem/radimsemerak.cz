@@ -39,7 +39,7 @@ pub struct TokenValidationRequest {
 struct Claims {
     sub: String,
     company: String,
-    expires: i64
+    exp: i64
 }
 
 pub struct TokensEncodeHandler {
@@ -54,7 +54,7 @@ struct TokensDecodeHandler {
 
 type TokenExpirationHandler<T> = tokio::task::JoinHandle<Result<T, AppError>>;
 
-pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<AppDataResponse<LoginResponse>, AppError> {
+pub async fn login(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<AppDataResponse<LoginResponse>, AppError> {
     if 
         username != env::var("ADMIN_USERNAME")? ||
         pw       != env::var("ADMIN_PASSWORD")?
@@ -70,7 +70,7 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
 
     let content = encode(
         &Header::new(Algorithm::default()),
-        &Claims { sub: env::var("JWT_SUBJECT")?, company: username, expires: expires.timestamp() },
+        &Claims { sub: env::var("JWT_SUBJECT")?, company: username, exp: expires.timestamp() },
         &EncodingKey::from_secret(env::var("JWT_SECRET")?.as_ref())
     )?;
     let token = Token {
@@ -93,7 +93,7 @@ pub async fn login_auth_handler(State(AppState { data }): State<AppState>, Json(
     ))
 }
 
-pub async fn validate_token(State(AppState { data }): State<AppState>, Json(TokenValidationRequest { id, client }): Json<TokenValidationRequest>) -> Result<(StatusCode, ()), AppError> {
+pub async fn verify(State(AppState { data }): State<AppState>, Json(TokenValidationRequest { id, client }): Json<TokenValidationRequest>) -> Result<(StatusCode, ()), AppError> {
     let token: Option<String> = tokens::table
         .find(id)
         .select(tokens::content)
@@ -155,10 +155,7 @@ fn is_valid(encode_handler: TokensEncodeHandler) -> anyhow::Result<bool> {
         server: handle_decode(encode_handler.server)?
     };
 
-    match decode_handler.client.claims == decode_handler.server.claims {
-        true => Ok(true),
-        false => Ok(false)
-    }
+    Ok(decode_handler.client.claims == decode_handler.server.claims)
 }
 
 fn handle_decode(token: String) -> anyhow::Result<TokenData<Claims>> {
