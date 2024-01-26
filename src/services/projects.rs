@@ -34,18 +34,18 @@ pub struct ProjectResponse {
     html: String
 }
 
-impl From<(i32, String)> for ProjectResponse {
-    fn from((id, html): (i32, String)) -> Self {
-        Self { id, html }
-    }
-}
-
 pub async fn handle_projects_action(State(AppState { data }): State<AppState>, mut multipart: Multipart) -> Result<(StatusCode, ()), AppError> {
     let mut req = DataRequest::default();
     let mut idn = IdentifierRequest::default();
 
     while let Some(field) = multipart.next_field().await? {
-        let name = field.name().unwrap_or_else(|| "").to_string();
+        let name = match field.name() {
+            Some(name) => name.to_string(),
+            None => return Err(AppError(
+                anyhow!("Field's name is required!"),
+                StatusCode::EXPECTATION_FAILED
+            ))
+        };
         let bytes = field.bytes().await?;
 
         match name.as_str() {
