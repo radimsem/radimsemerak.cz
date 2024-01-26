@@ -35,7 +35,3 @@
         </Sheet.Root>
     </aside>
 </section>
-
-<style>
-
-</style>

@@ -3,27 +3,7 @@
     import { readable } from 'svelte/store';
     import * as Table from '$lib/components/ui/table';
 
-    type Payment = {
-        id: string;
-        amount: number;
-        status: "pending" | "processing" | "success" | "failed";
-        email: string;
-    };
-    export const data: Payment[] = [
-        {
-            id: "728ed52f",
-            amount: 100,
-            status: "pending",
-            email: "m@example.com"
-        },
-        {
-            id: "489e1d42",
-            amount: 125,
-            status: "processing",
-            email: "example@gmail.com"
-        }
-        // ...
-    ];
+    export const data: ProjectResponse[] = [];
 
     const table = createTable(readable(data));
     const columns = table.createColumns([
@@ -32,20 +12,8 @@
         header: "ID"
         }),
         table.column({
-        accessor: "status",
-        header: "Status"
-        }),
-        table.column({
-        accessor: "email",
-        header: "Email"
-        }),
-        table.column({
-        accessor: "amount",
-        header: "Amount"
-        }),
-        table.column({
-        accessor: ({ id }) => id,
-        header: ""
+        accessor: "title",
+        header: "Title"
         })
     ]);
 
@@ -53,7 +21,7 @@
         table.createViewModel(columns);
 </script>
 
-<div class="rounded-md border">
+<div class="bg-[rgb(32,39,55)] bg-opacity-50 rounded-xl border border-slate-500">
     <Table.Root {...$tableAttrs}>
         <Table.Header>
         {#each $headerRows as headerRow}

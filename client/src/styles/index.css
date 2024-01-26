@@ -51,3 +51,10 @@ p a {
     background-clip: text;
     -webkit-text-fill-color: transparent;
 }
+
+input[type="file"]::file-selector-button {
+    cursor: pointer;
+    color: rgb(203 213 225);
+    background: transparent;
+    border: none;  
+}

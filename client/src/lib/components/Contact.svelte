@@ -39,7 +39,3 @@
         </div>
     </article>
 </section>
-
-<style>
-    
-</style>

@@ -20,7 +20,7 @@
         <Card.Root class="space-y-2 {form?.err && "space-y-0"} px-2 pb-3 bg-[rgb(32,39,55)] bg-opacity-50 border-none">
             <Card.Header class="items-center">
                 <img 
-                    src={logo} 
+                    src={logo}
                     alt="Logo Semerak"
                     width="70"
                     height="70"
@@ -81,7 +81,3 @@
         </Card.Root>
     </section>
 </main>
-
-<style>
-
-</style>

@@ -1,6 +1,13 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    projects (id) {
+        id -> Int4,
+        html -> Text,
+    }
+}
+
+diesel::table! {
     tokens (id) {
         id -> Int4,
         content -> Text,
@@ -9,9 +16,7 @@ diesel::table! {
     }
 }
 
-diesel::table! {
-    projects (id) {
-        id -> Int4,
-        html -> Text,
-    }
-}
+diesel::allow_tables_to_appear_in_same_query!(
+    projects,
+    tokens,
+);

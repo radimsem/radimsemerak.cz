@@ -37,7 +37,3 @@
         </a> -->
     </section>
 </section>
-
-<style>
-    
-</style>

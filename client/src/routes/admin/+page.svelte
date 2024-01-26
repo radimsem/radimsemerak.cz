@@ -1,40 +1,19 @@
 <script lang="ts">
+    import type { PageServerData } from './$types';
+
+    // components
     import DataTable from './data-table.svelte';
+
+    export let data: PageServerData;
 </script>
 
-<div class="relative">
-    <aside></aside>
-
-    <div class="space-y-10 px-[5%] py-4 text-slate-300">
-        <header class="flex items-center justify-between">
-            <div class="space-y-1">
-                <h2 class="text-2xl font-semibold text-slate-100">
-                    Admin
-                </h2>
-                <h3>Overview</h3>
-            </div>
-            <a href="/" target="_blank">
-                <md-filled-button class="text-[.95rem]">
-                    See web
-                </md-filled-button>
-            </a>
-        </header>
-    
-        <main>
-            <section>
-                <article>
-                    <h1 class="text-[1.7rem] heading">
-                        Projects overview
-                    </h1>
-                </article>
-                <article>
-                    <DataTable />
-                </article>
-            </section>
-        </main>
-    </div>
-</div>
-
-<style>
-
-</style>
+<section class="space-y-6">
+    <article>
+        <h1 class="text-[1.7rem] heading">
+            Projects overview
+        </h1>
+    </article>
+    <article>
+        <DataTable data={data.projects} />
+    </article>
+</section>

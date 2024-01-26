@@ -31,8 +31,12 @@ enum IdentifierAction {
 #[derive(Serialize)]
 pub struct ProjectResponse {
     id: i32,
+    heading: String,
+    annotation: String,
     html: String
 }
+
+const ANNOTATION_LENGTH: usize = 25;
 
 pub async fn handle_projects_action(State(AppState { data }): State<AppState>, mut multipart: Multipart) -> Result<(StatusCode, ()), AppError> {
     let mut req = DataRequest::default();
@@ -82,12 +86,28 @@ pub async fn handle_projects_action(State(AppState { data }): State<AppState>, m
 }
 
 pub async fn get_projects(State(AppState { data }): State<AppState>) -> Result<AppDataResponse<Vec<ProjectResponse>>, AppError> {
-    let projects: Vec<ProjectResponse> = projects::table
+    let results: Vec<Result<ProjectResponse, AppError>> = projects::table
         .select((projects::id, projects::html))
         .load::<(i32, String)>(&mut data.lock().unwrap().conn)?
         .into_iter()
-        .map(|(id, html)| ProjectResponse { id, html })
+        .map(|(id, html)| {
+            let project = ProjectResponse { 
+                id, 
+                heading: get_content("h1", &html)?,
+                annotation: get_content("p", &html)?,
+                html 
+            };
+            Ok(project)
+        })
         .collect();
+
+    let mut projects: Vec<ProjectResponse> = Vec::with_capacity(results.capacity());
+    for result in results {
+        match result {
+            Ok(project) => projects.push(project),
+            Err(err) => return Err(err)
+        }
+    }
     
     Ok((
         StatusCode::OK,
@@ -158,3 +178,28 @@ fn validate_file(file: &Option<NamedTempFile>) -> Result<String, AppError> {
         ))
     }
 }
+
+fn get_content(tag: &str, html: &String) -> Result<String, AppError> {
+    let offset = tag.len() + 2;
+    let start = handle_expected_tag(tag, html.find(format!("<{tag}>").as_str()))? + offset;
+    let end = handle_expected_tag(tag, html.find(format!("</{tag}>").as_str()))?;
+    let mut content = html[start..end].to_string();
+
+    if tag == "p" {
+        if content.len() > ANNOTATION_LENGTH {
+            content = content.chars().take(ANNOTATION_LENGTH - 1).collect();
+        }
+    }
+
+    Ok(content)
+}
+
+fn handle_expected_tag(tag: &str, index: Option<usize>) -> Result<usize, AppError> {
+    match index {
+        Some(idx) => Ok(idx),
+        None => Err(AppError(
+            anyhow!("Expected tag {tag} not found!"),
+            StatusCode::EXPECTATION_FAILED
+        ))
+    }
+} 

@@ -121,8 +121,8 @@ pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>)
     let tokens: Vec<(i32, NaiveDateTime)> = tokens::table
         .select((tokens::id, tokens::expires))
         .load(&mut data.lock().unwrap().conn)?;
+    
     let mut handles: Vec<TokenExpirationHandler<usize>> = Vec::with_capacity(tokens.capacity());
-
     if tokens.len() > 0 {
         for (id, expiration) in tokens {
             let curr = Local::now().naive_local();

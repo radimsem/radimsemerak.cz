@@ -180,7 +180,3 @@
         </p>
     </article>
 </section>
-
-<style>
-    
-</style>
