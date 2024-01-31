@@ -1,19 +1,27 @@
 <script lang="ts">
-    import { createTable, Render, Subscribe } from 'svelte-headless-table';
+    import { createRender, createTable, Render, Subscribe } from 'svelte-headless-table';
     import { readable } from 'svelte/store';
     import * as Table from '$lib/components/ui/table';
+    import DataTableActions from './data-table-actions.svelte';
 
-    export const data: ProjectResponse[] = [];
+    export let data: ProjectResponse[];
 
     const table = createTable(readable(data));
     const columns = table.createColumns([
         table.column({
-        accessor: "id",
-        header: "ID"
+            accessor: "id",
+            header: "ID"
         }),
         table.column({
-        accessor: "title",
-        header: "Title"
+            accessor: "title",
+            header: "Title"
+        }),
+        table.column({
+            accessor: ({ id }) => id,
+            header: "",
+            cell: ({ value }) => {
+                return createRender(DataTableActions, { id: value.toString() })
+            }
         })
     ]);
 

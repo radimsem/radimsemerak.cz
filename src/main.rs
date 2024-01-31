@@ -12,7 +12,7 @@ use semerak::services::auth::{handle_tokens_expiration, handle_login_auth, verif
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
-    
+
     let port = env::var("PORT")?;
     let db = Database::build()?;
     println!("Connected to database");

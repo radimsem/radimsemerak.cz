@@ -31,7 +31,7 @@ enum IdentifierAction {
 #[derive(Serialize)]
 pub struct ProjectResponse {
     id: i32,
-    heading: String,
+    title: String,
     annotation: String,
     html: String
 }
@@ -93,7 +93,7 @@ pub async fn get_projects(State(AppState { data }): State<AppState>) -> Result<A
         .map(|(id, html)| {
             let project = ProjectResponse { 
                 id, 
-                heading: get_content("h1", &html)?,
+                title: get_content("h1", &html)?,
                 annotation: get_content("p", &html)?,
                 html 
             };
@@ -153,20 +153,20 @@ fn validate_file(file: &Option<NamedTempFile>) -> Result<String, AppError> {
                     StatusCode::NOT_ACCEPTABLE
                 ))
             }
-            match path.extension() {
-                Some(ext) => {
-                    if ext != "md" {
-                        return Err(AppError(
-                            anyhow!("File's extension {:?} is not a Markdown file!", ext),
-                            StatusCode::NOT_ACCEPTABLE
-                        ))
-                    }
-                },
-                None => return Err(AppError(
-                    anyhow!("File has no extension!"),
-                    StatusCode::NOT_ACCEPTABLE
-                ))
-            }
+            // match path.extension() {
+            //     Some(ext) => {
+            //         if ext != "md" {
+            //             return Err(AppError(
+            //                 anyhow!("File's extension {:?} is not a Markdown file!", ext),
+            //                 StatusCode::NOT_ACCEPTABLE
+            //             ))
+            //         }
+            //     },
+            //     None => return Err(AppError(
+            //         anyhow!("File has no extension!"),
+            //         StatusCode::NOT_ACCEPTABLE
+            //     ))
+            // }
 
             let html = MdParser::generate::<PathBuf>(&path)?;
 

@@ -17,10 +17,10 @@ export const load: PageServerLoad = async ({ cookies }) => {
         handleInvalidToken("There is no token at the moment!");
     }
 
-    // const res = await fetch("http://127.0.0.1:8080/api/projects/get");
-    // const projects: ProjectResponse[] = await res.json();
+    const res = await fetch("http://127.0.0.1:8080/api/projects/get");
+    const projects: ProjectResponse[] = await res.json();
 
-    // return { projects };
+    return { projects };
 };
 
 function handleInvalidToken(err: string) {

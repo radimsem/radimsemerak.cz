@@ -8,8 +8,9 @@
         <Card.Root class="space-y-2 px-2 pt-5 pb-2 bg-[rgb(32,39,55)] bg-opacity-50 border-none">
             <Card.Content class="space-y-4 px-5">
                 <form
-                    action="?/new"
+                    action="/admin/projects"
                     method="post"
+                    enctype="multipart/form-data"
                     class="flex flex-col gap-3"
                 >
                     <fieldset class="flex flex-col gap-1">
