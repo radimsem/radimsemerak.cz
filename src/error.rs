@@ -4,7 +4,7 @@ pub struct AppError(pub anyhow::Error, pub StatusCode);
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        (self.1, self.0.to_string()).into_response()
+        (self.1, format!("Server error: {}", self.0.to_string())).into_response()
     }
 }
 

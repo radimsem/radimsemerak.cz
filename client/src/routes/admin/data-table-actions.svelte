@@ -42,7 +42,11 @@
         <Dialog.Content class="text-slate-300 bg-[#12181b] border border-slate-700 !rounded-xl z-[100]">
             <Dialog.Header class="space-y-5">
                 <Dialog.Title class="text-start">Do you want to delete project {id}?</Dialog.Title>
-                <form action="/admin/projects">
+                <form 
+                    method="post" 
+                    action="/admin/projects"
+                    enctype="multipart/form-data"
+                >
                     <Button 
                         type="submit"
                         variant="destructive"
