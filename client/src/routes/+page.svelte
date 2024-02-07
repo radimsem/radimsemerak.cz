@@ -5,6 +5,9 @@
 	import Experience from '$lib/components/Experience.svelte';
 	import Projects from '$lib/components/Projects.svelte';
 	import Contact from '$lib/components/Contact.svelte';
+    import type { PageServerData } from './$types';
+
+	export let data: PageServerData;
 </script>
 
 <svelte:head>
@@ -19,7 +22,7 @@
 		<section class="space-y-20">
 			<Hero />
 			<Experience />
-			<Projects />
+			<Projects data={data.projects}/>
 			<Contact />
 		</section>		
 	</main>

@@ -2,7 +2,7 @@ use std::{io::Write, path::PathBuf, sync::{Arc, Mutex}};
 
 use anyhow::anyhow;
 use axum::{extract::{State, Multipart}, http::StatusCode, Json};
-use diesel::{query_dsl::methods::{FilterDsl, SelectDsl}, ExpressionMethods, RunQueryDsl};
+use diesel::{query_dsl::methods::FilterDsl, ExpressionMethods, RunQueryDsl, prelude::*};
 use serde::Serialize;
 use tempfile::NamedTempFile;
 
@@ -92,15 +92,14 @@ pub async fn get_projects(State(AppState { data }): State<AppState>) -> Result<A
         .select((projects::id, projects::html))
         .load::<(i32, String)>(&mut data.lock().unwrap().conn)?
         .into_iter()
-        .map(|(id, html)| {
-            let project = ProjectResponse { 
+        .map(|(id, html)| Ok( 
+            ProjectResponse { 
                 id, 
                 title: get_content("h1", &html)?,
                 annotation: get_content("p", &html)?,
                 html 
-            };
-            Ok(project)
-        })
+            })
+        )
         .collect();
 
     let mut projects: Vec<ProjectResponse> = Vec::with_capacity(results.capacity());
@@ -112,12 +111,37 @@ pub async fn get_projects(State(AppState { data }): State<AppState>) -> Result<A
     ))
 }
 
+pub async fn get_unique_project(State(AppState { data }): State<AppState>, Json(id): Json<String> ) -> Result<AppDataResponse<ProjectResponse>, AppError> {
+    let result: Option<String> = projects::table
+        .find(id.parse::<i32>()?)
+        .select(projects::html)
+        .first::<String>(&mut data.lock().unwrap().conn)
+        .optional()?;
+
+    match result {
+        Some(html) => Ok((
+            StatusCode::OK,
+            Json(ProjectResponse {
+                id: id.as_str().parse()?,
+                title: get_content("h1", &html)?,
+                annotation: get_content("p", &html)?,
+                html
+            })
+        )),
+        None => Err(AppError(
+            anyhow!("Unable to find project with id: {id}"),
+            StatusCode::NOT_FOUND
+        ))
+        
+    }
+}
+
 fn handle_action(data: &Arc<Mutex<Database>>, body: DataRequest) -> Result<(), AppError> {
     match body.idn {
         Some(idn) => match idn.action {
             IdentifierAction::UPDATE => {
                 let html = validate_file(&body.file)?;
-                diesel::update(projects::table.filter(projects::id.eq(idn.id)))
+                diesel::update(FilterDsl::filter(projects::table, projects::id.eq(idn.id)))
                     .set(projects::html.eq(html))
                     .execute(&mut data.lock().unwrap().conn)?;
             },
@@ -169,8 +193,12 @@ fn get_content(tag: &str, html: &String) -> Result<String, AppError> {
 
     if tag == "p" {
         if content.len() > ANNOTATION_LENGTH {
-            content = content.chars().take(ANNOTATION_LENGTH - 1).collect();
+            let idx: Option<usize> = content.as_bytes()[ANNOTATION_LENGTH..].iter().position(|c| *c as char == ' '); 
+            if let Some(val) = idx {
+                content = String::from(&content[0..val]);
+            }
         }
+        content.push_str("...");
     }
 
     Ok(content)

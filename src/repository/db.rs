@@ -1,7 +1,7 @@
 use std::env;
 
 use anyhow::{bail, Ok, Result};
-use diesel::{PgConnection, Connection};
+use diesel::{Connection, PgConnection};
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
 pub struct Database {

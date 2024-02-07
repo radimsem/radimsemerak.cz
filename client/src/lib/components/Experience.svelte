@@ -1,6 +1,5 @@
 <script lang="ts">
-    // icons
-    import Icon from '@iconify/svelte';
+
 </script>
 
 <section id="experience" class="main-sec">

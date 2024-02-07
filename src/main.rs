@@ -4,7 +4,7 @@ use std::{env, error::Error};
 use axum::{Router, routing::{post, get}};
 use dotenv::dotenv;
 
-use semerak::services::projects::{handle_projects_action, get_projects};
+use semerak::services::projects::{get_projects, get_unique_project, handle_projects_action};
 use semerak::AppState;
 use semerak::repository::db::Database;
 use semerak::services::auth::{handle_tokens_expiration, handle_login_auth, verify_token};
@@ -22,6 +22,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .route("/api/login", post(handle_login_auth))
         .route("/api/verify", post(verify_token))
         .route("/api/projects/action", post(handle_projects_action))
+        .route("/api/projects/unique", post(get_unique_project))
         .route("/api/projects/get", get(get_projects))
         .route("/api/expires", get(handle_tokens_expiration))
         .with_state(state);
