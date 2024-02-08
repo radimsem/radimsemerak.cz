@@ -137,24 +137,25 @@ pub async fn get_unique_project(State(AppState { data }): State<AppState>, Json(
 }
 
 fn handle_action(data: &Arc<Mutex<Database>>, body: DataRequest) -> Result<(), AppError> {
+    let conn: &mut PgConnection = &mut data.lock().unwrap().conn;
     match body.idn {
         Some(idn) => match idn.action {
             IdentifierAction::UPDATE => {
                 let html = validate_file(&body.file)?;
                 diesel::update(FilterDsl::filter(projects::table, projects::id.eq(idn.id)))
                     .set(projects::html.eq(html))
-                    .execute(&mut data.lock().unwrap().conn)?;
+                    .execute(conn)?;
             },
             IdentifierAction::DELETE => {
                 diesel::delete(FilterDsl::filter(projects::table, projects::id.eq(idn.id)))
-                    .execute(&mut data.lock().unwrap().conn)?;
+                    .execute(conn)?;
             }
         },
         None => {
             let html = validate_file(&body.file)?;
             diesel::insert_into(projects::table)
                 .values(&Project { html })
-                .execute(&mut data.lock().unwrap().conn)?;
+                .execute(conn)?;
         }
     }
 
@@ -193,7 +194,7 @@ fn get_content(tag: &str, html: &String) -> Result<String, AppError> {
 
     if tag == "p" {
         if content.len() > ANNOTATION_LENGTH {
-            let idx: Option<usize> = content.as_bytes()[ANNOTATION_LENGTH..].iter().position(|c| *c as char == ' '); 
+            let idx: Option<usize> = content.as_bytes()[ANNOTATION_LENGTH..].iter().position(|x| *x as char == ' '); 
             if let Some(val) = idx {
                 content = String::from(&content[0..val]);
             }

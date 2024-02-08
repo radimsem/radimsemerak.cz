@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .route("/api/verify", post(verify_token))
         .route("/api/projects/action", post(handle_projects_action))
         .route("/api/projects/unique", post(get_unique_project))
-        .route("/api/projects/get", get(get_projects))
+        .route("/api/projects/all", get(get_projects))
         .route("/api/expires", get(handle_tokens_expiration))
         .with_state(state);
     

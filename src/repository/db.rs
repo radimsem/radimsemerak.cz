@@ -20,7 +20,7 @@ impl Database {
 fn complete_db_uri(db_uri: &mut String, pw: String) -> Result<String> {
     let encoded_pw = utf8_percent_encode(pw.as_str(), NON_ALPHANUMERIC).to_string();
 
-    let mid = db_uri.as_bytes().iter().position(|chr| *chr as char == '@');
+    let mid = db_uri.as_bytes().iter().position(|x| *x as char == '@');
     match mid {
         Some(idx) => db_uri.insert_str(idx, encoded_pw.as_str()),
         None => bail!("Database URI has invalid content!")

@@ -17,7 +17,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
         handleInvalidToken("There is no token at the moment!");
     }
 
-    const res = await fetch("http://127.0.0.1:8080/api/projects/get");
+    const res = await fetch("http://127.0.0.1:8080/api/projects/all");
     const projects: ProjectResponse[] = await res.json();
 
     return { projects };

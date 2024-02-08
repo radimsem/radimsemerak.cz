@@ -134,7 +134,6 @@ pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>)
 
                 handles.push(tokio::task::spawn(async move {
                     timer.await;
-
                     diesel::delete(FilterDsl::filter(tokens::table, tokens::id.eq(id)))
                         .execute(&mut db.lock().unwrap().conn)
                         .map_err(|e| AppError(anyhow!("Could not delete token {id}: {e}"), StatusCode::EXPECTATION_FAILED))
