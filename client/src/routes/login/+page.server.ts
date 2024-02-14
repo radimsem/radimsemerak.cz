@@ -23,6 +23,7 @@ export const actions = {
         expires.setTime(token.expires);
         cookies.set("token", `${token.id}|${token.content}`, { path: '/' });
 
+        fetch("http://127.0.0.1:8080/api/expires");
         redirect(301, "/admin");
     }
 } satisfies Actions;

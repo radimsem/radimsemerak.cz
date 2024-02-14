@@ -1,12 +1,14 @@
+use std::env;
 use std::sync::{Arc, Mutex};
-use std::{env, error::Error};
+use std::error::Error;
 
-use axum::{Router, routing::{post, get}};
+use axum::Router;
+use axum::routing::{post, get};
 use dotenv::dotenv;
 
-use semerak::services::projects::{get_projects, get_unique_project, handle_projects_action};
 use semerak::AppState;
 use semerak::repository::db::Database;
+use semerak::services::projects::{get_projects, get_unique_project, handle_projects_action};
 use semerak::services::auth::{handle_tokens_expiration, handle_login_auth, verify_token};
 
 #[tokio::main]
@@ -17,7 +19,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let db = Database::build()?;
     println!("Connected to database");
 
-    let state = AppState { data: Arc::new(Mutex::new(db)) };
+    let state = AppState { db: Arc::new(Mutex::new(db)) };
     let app: Router = Router::new()
         .route("/api/login", post(handle_login_auth))
         .route("/api/verify", post(verify_token))

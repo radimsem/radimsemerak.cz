@@ -1,12 +1,22 @@
-use std::{io::Write, path::PathBuf, sync::{Arc, Mutex}};
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use anyhow::anyhow;
-use axum::{extract::{State, Multipart}, http::StatusCode, Json};
-use diesel::{query_dsl::methods::FilterDsl, ExpressionMethods, RunQueryDsl, prelude::*};
+use axum::Json;
+use axum::extract::{State, Multipart};
+use axum::http::StatusCode;
+use diesel::prelude::*;
+use diesel::query_dsl::methods::FilterDsl;
+use diesel::{ExpressionMethods, RunQueryDsl};
 use serde::Serialize;
 use tempfile::NamedTempFile;
 
-use crate::{error::AppError, models::project::Project, repository::db::Database, schema::projects, AppDataResponse, AppState};
+use crate::{AppState, AppDataResponse};
+use crate::error::AppError;
+use crate::models::project::Project;
+use crate::repository::db::Database;
+use crate::schema::projects;
 use crate::services::parser::MdParser;
 
 #[derive(Default)]
@@ -16,13 +26,13 @@ struct DataRequest {
 }
 
 #[derive(Default, PartialEq)]
-struct IdentifierRequest {
-    id: i32,
-    action: IdentifierAction
+pub struct IdentifierRequest {
+    pub id: i32,
+    pub action: IdentifierAction
 }
 
 #[derive(Default, PartialEq)]
-enum IdentifierAction {
+pub enum IdentifierAction {
     #[default]
     UPDATE,
     DELETE
@@ -38,7 +48,7 @@ pub struct ProjectResponse {
 
 const ANNOTATION_LENGTH: usize = 25;
 
-pub async fn handle_projects_action(State(AppState { data }): State<AppState>, mut multipart: Multipart) -> Result<(StatusCode, ()), AppError> {
+pub async fn handle_projects_action(State(AppState { db }): State<AppState>, mut multipart: Multipart) -> Result<(StatusCode, ()), AppError> {
     let mut req = DataRequest::default();
     let mut idn = IdentifierRequest::default();
 
@@ -82,15 +92,15 @@ pub async fn handle_projects_action(State(AppState { data }): State<AppState>, m
     if idn != IdentifierRequest::default() {
         req.idn = Some(idn);
     }
-    handle_action(&data, req)?;
+    handle_action(&db, req)?;
 
     Ok((StatusCode::OK, ()))
 }
 
-pub async fn get_projects(State(AppState { data }): State<AppState>) -> Result<AppDataResponse<Vec<ProjectResponse>>, AppError> {
+pub async fn get_projects(State(AppState { db }): State<AppState>) -> Result<AppDataResponse<Vec<ProjectResponse>>, AppError> {
     let results: Vec<Result<ProjectResponse, AppError>> = projects::table
         .select((projects::id, projects::html))
-        .load::<(i32, String)>(&mut data.lock().unwrap().conn)?
+        .load::<(i32, String)>(&mut db.lock().unwrap().conn)?
         .into_iter()
         .map(|(id, html)| Ok( 
             ProjectResponse { 
@@ -111,11 +121,11 @@ pub async fn get_projects(State(AppState { data }): State<AppState>) -> Result<A
     ))
 }
 
-pub async fn get_unique_project(State(AppState { data }): State<AppState>, Json(id): Json<String> ) -> Result<AppDataResponse<ProjectResponse>, AppError> {
+pub async fn get_unique_project(State(AppState { db }): State<AppState>, Json(id): Json<String> ) -> Result<AppDataResponse<ProjectResponse>, AppError> {
     let result: Option<String> = projects::table
         .find(id.parse::<i32>()?)
         .select(projects::html)
-        .first::<String>(&mut data.lock().unwrap().conn)
+        .first::<String>(&mut db.lock().unwrap().conn)
         .optional()?;
 
     match result {
@@ -136,8 +146,8 @@ pub async fn get_unique_project(State(AppState { data }): State<AppState>, Json(
     }
 }
 
-fn handle_action(data: &Arc<Mutex<Database>>, body: DataRequest) -> Result<(), AppError> {
-    let conn: &mut PgConnection = &mut data.lock().unwrap().conn;
+fn handle_action(db: &Arc<Mutex<Database>>, body: DataRequest) -> Result<(), AppError> {
+    let conn: &mut PgConnection = &mut db.lock().unwrap().conn;
     match body.idn {
         Some(idn) => match idn.action {
             IdentifierAction::UPDATE => {
@@ -194,7 +204,7 @@ fn get_content(tag: &str, html: &String) -> Result<String, AppError> {
 
     if tag == "p" {
         if content.len() > ANNOTATION_LENGTH {
-            let idx: Option<usize> = content.as_bytes()[ANNOTATION_LENGTH..].iter().position(|x| *x as char == ' '); 
+            let idx: Option<usize> = content.as_bytes()[ANNOTATION_LENGTH..].iter().position(|x: &u8| *x as char == ' '); 
             if let Some(val) = idx {
                 content = String::from(&content[0..val]);
             }

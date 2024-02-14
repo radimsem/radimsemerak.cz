@@ -6,7 +6,7 @@
     // icons
     import Icon from "@iconify/svelte";
 
-    export let id: string;
+    export let assets: { id: string, title: string };
 </script>
 
 <DropdownMenu.Root>
@@ -25,7 +25,7 @@
         </Button>
     </DropdownMenu.Trigger>
     <DropdownMenu.Content class="p-3 text-slate-300 bg-[rgb(32,39,55)] border-none rounded-xl z-10">
-        <a href={`admin/projects/update/${id}`} class="outline-none">
+        <a href={`admin/projects/update/${assets.id}`} class="outline-none">
             <DropdownMenu.Item>
                 <Icon icon="mdi:edit" width="18" />
                 Edit
@@ -41,7 +41,7 @@
             </Dialog.Trigger>
         <Dialog.Content class="text-slate-300 bg-[#12181b] border border-slate-700 !rounded-xl z-[100]">
             <Dialog.Header class="space-y-5">
-                <Dialog.Title class="text-start">Do you want to delete project {id}?</Dialog.Title>
+                <Dialog.Title class="text-start">Do you want to delete project {assets.title}?</Dialog.Title>
                 <form 
                     method="post" 
                     action="/admin/projects"
@@ -52,7 +52,7 @@
                         variant="destructive"
                         class="px-5 bg-[#7f1d1d] rounded-full hover:bg-[#731b1b]"
                     >Delete</Button>
-                    <input type="hidden" name="id" value={id}>
+                    <input type="hidden" name="id" value={assets.id}>
                     <input type="hidden" name="action" value="delete">
                 </form>
             </Dialog.Header>

@@ -30,7 +30,6 @@ function handleInvalidToken(err: string) {
 
 function handleTokenValidationRequest(value: string): TokenValidationRequest {
     let params = value.split('|');
-
     return {
         id: parseInt(params.at(0) as string),
         client: params.at(1) as string

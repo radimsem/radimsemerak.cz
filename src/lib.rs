@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
-use axum::{http::StatusCode, Json};
+use axum::Json;
+use axum::http::StatusCode;
 use repository::db::Database;
 
 pub mod models;
@@ -12,5 +13,5 @@ pub type AppDataResponse<T> = (StatusCode, Json<T>);
 
 #[derive(Clone)]
 pub struct AppState {
-    pub data: Arc<Mutex<Database>>
+    pub db: Arc<Mutex<Database>>
 }

@@ -3,11 +3,13 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_io::Timer;
+use axum::Json;
 use axum::extract::State;
-use axum::{Json, http::StatusCode};
+use axum::http::StatusCode;
 use chrono::{Local, Duration, NaiveDateTime};
+use diesel::prelude::*;
 use diesel::query_dsl::methods::FilterDsl;
-use diesel::{ExpressionMethods, RunQueryDsl, prelude::*};
+use diesel::{ExpressionMethods, RunQueryDsl};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 
@@ -54,7 +56,7 @@ struct TokensDecodeHandler {
 
 type TokenExpirationHandler<T> = tokio::task::JoinHandle<Result<T, AppError>>;
 
-pub async fn handle_login_auth(State(AppState { data }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<AppDataResponse<LoginResponse>, AppError> {
+pub async fn handle_login_auth(State(AppState { db }): State<AppState>, Json(LoginRequest { username, pw }): Json<LoginRequest>) -> Result<AppDataResponse<LoginResponse>, AppError> {
     if 
         username != env::var("ADMIN_USERNAME")? ||
         pw       != env::var("ADMIN_PASSWORD")?
@@ -81,7 +83,7 @@ pub async fn handle_login_auth(State(AppState { data }): State<AppState>, Json(L
     let (id, content, expires) = diesel::insert_into(tokens::table)
         .values(&token)
         .returning((tokens::id, tokens::content, tokens::expires))
-        .get_result::<(i32, String, NaiveDateTime)>(&mut data.lock().unwrap().conn)?;
+        .get_result::<(i32, String, NaiveDateTime)>(&mut db.lock().unwrap().conn)?;
         
     Ok((
         StatusCode::CREATED,
@@ -93,11 +95,11 @@ pub async fn handle_login_auth(State(AppState { data }): State<AppState>, Json(L
     ))
 }
 
-pub async fn verify_token(State(AppState { data }): State<AppState>, Json(TokenValidationRequest { id, client }): Json<TokenValidationRequest>) -> Result<(StatusCode, ()), AppError> {
+pub async fn verify_token(State(AppState { db }): State<AppState>, Json(TokenValidationRequest { id, client }): Json<TokenValidationRequest>) -> Result<(StatusCode, ()), AppError> {
     let token: Option<String> = tokens::table
         .find(id)
         .select(tokens::content)
-        .first::<String>(&mut data.lock().unwrap().conn)
+        .first::<String>(&mut db.lock().unwrap().conn)
         .optional()?;
 
     match token {
@@ -117,10 +119,10 @@ pub async fn verify_token(State(AppState { data }): State<AppState>, Json(TokenV
     }
 }
 
-pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>) -> Result<(StatusCode, ()), AppError> {
+pub async fn handle_tokens_expiration(State(AppState { db }): State<AppState>) -> Result<(StatusCode, ()), AppError> {
     let tokens: Vec<(i32, NaiveDateTime)> = tokens::table
         .select((tokens::id, tokens::expires))
-        .load(&mut data.lock().unwrap().conn)?;
+        .load(&mut db.lock().unwrap().conn)?;
     
     let mut handles: Vec<TokenExpirationHandler<usize>> = Vec::with_capacity(tokens.capacity());
     if tokens.len() > 0 {
@@ -130,7 +132,7 @@ pub async fn handle_tokens_expiration(State(AppState { data }): State<AppState>)
             if curr < expiration {
                 let left = expiration - curr;
                 let timer = Timer::after(std::time::Duration::from_secs(left.num_seconds().try_into()?));
-                let db = Arc::clone(&data);
+                let db = Arc::clone(&db);
 
                 handles.push(tokio::task::spawn(async move {
                     timer.await;

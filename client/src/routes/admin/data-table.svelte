@@ -17,10 +17,13 @@
             header: "Title"
         }),
         table.column({
-            accessor: ({ id }) => id,
+            accessor: (item) => item,
             header: "",
             cell: ({ value }) => {
-                return createRender(DataTableActions, { id: value.toString() })
+                return createRender(
+                    DataTableActions, 
+                    { assets: { id: value.id.toString(), title: value.title } }
+                );
             }
         })
     ]);
