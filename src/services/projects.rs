@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use axum::Json;
@@ -10,11 +11,12 @@ use diesel::query_dsl::methods::FilterDsl;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use serde::Serialize;
 use tempfile::NamedTempFile;
+use tokio::sync::Mutex;
 
 use crate::{AppState, AppDataResponse};
 use crate::error::AppError;
 use crate::models::project::Project;
-use crate::repository::{ActionRequest, ConstructJob, FieldJob, IdentifierAction};
+use crate::repository::{db, ActionRequest, ConstructJob, FieldJob, IdentifierAction};
 use crate::schema::projects;
 use crate::services::parser::MdParser;
 
@@ -37,15 +39,16 @@ pub async fn handle_action(State(AppState { db }): State<AppState>, mut multipar
     let mut db = db.lock().await;
     let mut expected_fields_with_jobs: HashMap<String, FieldJob<ProjectRequest>> = HashMap::new();
 
-    expected_fields_with_jobs.insert( "file".to_string(),
-        Box::new(|body, bytes| {
+    expected_fields_with_jobs.insert(
+        "file".to_string(),
+        Arc::new(Mutex::new(Box::new(|body, bytes| {
             let mut file = NamedTempFile::new()?;
             file.write_all(&bytes)?;
             body.file = Some(file);
             Ok(())
-        })
+        })))
     );
-    let acr: ActionRequest<ProjectRequest> = db.handle_multipart_stream(&mut multipart, &mut expected_fields_with_jobs).await?;
+    let acr: ActionRequest<ProjectRequest> = db::methods::handle_multipart_stream(&mut multipart, &mut expected_fields_with_jobs).await?;
 
     match acr.idr.action {
         IdentifierAction::UPDATE => {
@@ -57,7 +60,11 @@ pub async fn handle_action(State(AppState { db }): State<AppState>, mut multipar
                     .execute(&mut db.conn)?;
                },
                None => {
-                  db.insert(projects::table, Project { html })?;
+                  db::methods::insert(
+                    projects::table,
+                    Project { html },
+                    &mut db.conn
+                  )?;
                }
             }
         },
@@ -78,32 +85,37 @@ pub async fn handle_action(State(AppState { db }): State<AppState>, mut multipar
 }
 
 pub async fn get_unique(State(AppState { db }): State<AppState>, Json(id): Json<String>) -> Result<AppDataResponse<ProjectResponse>, AppError> {
-    let id = id.parse::<i32>()?;
-    let construct_job: ConstructJob<(i32, String), ProjectResponse> = Box::new(|(id, html)| {
-        Ok(ProjectResponse {
-            id,
-            title: get_content("h1", &html)?,
-            annotation: get_content("p", &html)?,
-            html
-        })
-    });
-    let result = db.lock().await.get_unique(projects::table, id, construct_job)?;
+    let construct_job = get_construct_job();
+    let result = db::methods::get_unique(
+        projects::table,
+        id.parse::<i32>()?,
+        construct_job,
+        &mut db.lock().await.conn
+    ).await?;
 
     Ok(result)
 }
 
 pub async fn get_all(State(AppState { db }): State<AppState>) -> Result<AppDataResponse<Vec<ProjectResponse>>, AppError> {
-    let construct_job: ConstructJob<(i32, String), ProjectResponse> = Box::new(|(id, html)| {
+    let construct_job = get_construct_job();
+    let result = db::methods::get_all(
+        projects::table,
+        construct_job,
+        &mut db.lock().await.conn
+    ).await?;
+
+    Ok(result)
+}
+
+fn get_construct_job() -> ConstructJob<(i32, String), ProjectResponse> {
+    Arc::new(Mutex::new(Box::new(|(id, html)| {
         Ok(ProjectResponse {
             id,
             title: get_content("h1", &html)?,
             annotation: get_content("p", &html)?,
             html
         })
-    }); 
-    let result = db.lock().await.get_all(projects::table, construct_job)?;
-
-    Ok(result)
+    })))
 }
 
 fn validate_file(file: &Option<NamedTempFile>) -> Result<String, AppError> {

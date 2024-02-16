@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use anyhow::{Result, bail};
-use axum::body::Bytes;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use tokio::sync::Mutex;
 
 use crate::error::AppError;
 
@@ -24,8 +26,9 @@ pub enum IdentifierAction {
     DELETE
 }
 
-pub type FieldJob<T> = Box<dyn FnOnce(&mut T, &Bytes) -> Result<()>>;
-pub type ConstructJob<T, U> = Box<dyn Fn(T) -> Result<U, AppError>>;
+type SharedJob<T> = Arc<Mutex<Box<T>>>;
+pub type FieldJob<T> = SharedJob<dyn Fn(&mut T, &Vec<u8>) -> Result<()> + Send + Sync>;
+pub type ConstructJob<T, U> = SharedJob<dyn Fn(T) -> Result<U, AppError> + Send + Sync>;
 
 pub fn complete_db_uri(db_uri: &mut String, pw: String) -> Result<String> {
     let encoded_pw = utf8_percent_encode(pw.as_str(), NON_ALPHANUMERIC).to_string();

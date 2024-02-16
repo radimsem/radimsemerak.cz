@@ -1,19 +1,5 @@
 use std::env;
 use diesel::{Connection, PgConnection};
-use std::collections::HashMap;
-
-use anyhow::anyhow;
-use axum::extract::Multipart;
-use axum::Json;
-use axum::http::StatusCode;
-use diesel::query_builder::InsertStatement;
-use diesel::{Insertable, RunQueryDsl, Table};
-use diesel::query_dsl::methods::{ExecuteDsl, FindDsl, LoadQuery};
-use diesel::pg::Pg;
-
-use crate::AppDataResponse;
-use crate::error::AppError;
-use crate::repository::{ActionRequest, IdentifierRequest, IdentifierAction, FieldJob, ConstructJob};
 use crate::repository::complete_db_uri;
 
 pub struct Database {
@@ -27,8 +13,26 @@ impl Database {
 
         Ok(Self { conn })
     }
+}
 
-    pub async fn handle_multipart_stream<T: Default>(&self, multipart: &mut Multipart, expected_fields_with_jobs: &mut HashMap<String, FieldJob<T>>) -> Result<ActionRequest<T>, AppError> {
+pub mod methods {
+    use diesel::PgConnection;
+    use std::collections::HashMap;
+
+    use anyhow::anyhow;
+    use axum::extract::Multipart;
+    use axum::Json;
+    use axum::http::StatusCode;
+    use diesel::query_builder::InsertStatement;
+    use diesel::{Insertable, RunQueryDsl, Table};
+    use diesel::query_dsl::methods::{ExecuteDsl, FindDsl, LoadQuery};
+    use diesel::pg::Pg;
+
+    use crate::AppDataResponse;
+    use crate::error::AppError;
+    use crate::repository::{ActionRequest, IdentifierRequest, IdentifierAction, FieldJob, ConstructJob};
+
+    pub async fn handle_multipart_stream<T: Default>(multipart: &mut Multipart, expected_fields_with_jobs: &mut HashMap<String, FieldJob<T>>) -> Result<ActionRequest<T>, AppError> {
         let mut acr = ActionRequest {
             body: T::default(),
             idr: IdentifierRequest::default()
@@ -44,9 +48,12 @@ impl Database {
             };
 
             if expected_fields_with_jobs.contains_key(&name) {
-                let bytes = field.bytes().await?;
+                let bytes = field.bytes().await?.to_vec();
                 match expected_fields_with_jobs.remove(&name) {
-                    Some(job) => job(&mut acr.body, &bytes)?,
+                    Some(job) => {
+                        let job = job.lock().await;
+                        job(&mut acr.body, &bytes)?;
+                    },
                     None => return Err(AppError(
                         anyhow!("Expected field does not have a job!"),
                         StatusCode::EXPECTATION_FAILED
@@ -74,7 +81,7 @@ impl Database {
         Ok(acr) 
     }
     
-    pub fn insert<T, U>(&mut self, table: T, records: U) -> anyhow::Result<()>
+    pub fn insert<T, U>(table: T, records: U, conn: &mut PgConnection) -> anyhow::Result<()>
     where
         T: Table,
         U: Insertable<T>,
@@ -82,18 +89,19 @@ impl Database {
     {
         diesel::insert_into(table)
             .values(records)
-            .execute(&mut self.conn)?;
+            .execute(conn)?;
         Ok(()) 
     }
 
-    pub fn get_unique<'a, T, U, V, PK>(&mut self, table: T, id: PK, construct_job: ConstructJob<U, V>) -> Result<AppDataResponse<V>, AppError>
+    pub async fn get_unique<'a, T, U, V, PK>(table: T, id: PK, construct_job: ConstructJob<U, V>, conn: &mut PgConnection) -> Result<AppDataResponse<V>, AppError>
     where
         T: FindDsl<PK>,
         <T as FindDsl<PK>>::Output: LoadQuery<'a, PgConnection, U>
     {
+        let construct_job = construct_job.lock().await;
         let result: U = table
             .find(id)
-            .load::<U>(&mut self.conn)?
+            .load::<U>(conn)?
             .remove(usize::default());
 
         Ok((
@@ -102,13 +110,14 @@ impl Database {
         ))
     }
 
-    pub fn get_all<'a, T, U, V>(&mut self, table: T, construct_job: ConstructJob<U, V>) -> Result<AppDataResponse<Vec<V>>, AppError>
+    pub async fn get_all<'a, T, U, V>(table: T, construct_job: ConstructJob<U, V>, conn: &mut PgConnection) -> Result<AppDataResponse<Vec<V>>, AppError>
     where
         T: RunQueryDsl<Pg>,
         T: LoadQuery<'a, PgConnection, U>,
     {
+        let construct_job = construct_job.lock().await;
         let results: Vec<Result<V, AppError>> = table
-           .load::<U>(&mut self.conn)?
+           .load::<U>(conn)?
            .into_iter()
            .map(|item: U| construct_job(item))
            .collect();
