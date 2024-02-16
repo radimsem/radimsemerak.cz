@@ -1,12 +1,11 @@
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 use anyhow::anyhow;
 use axum::Json;
 use axum::extract::{State, Multipart};
 use axum::http::StatusCode;
-use diesel::prelude::*;
 use diesel::query_dsl::methods::FilterDsl;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use serde::Serialize;
@@ -15,27 +14,13 @@ use tempfile::NamedTempFile;
 use crate::{AppState, AppDataResponse};
 use crate::error::AppError;
 use crate::models::project::Project;
-use crate::repository::db::Database;
+use crate::repository::{ActionRequest, ConstructJob, FieldJob, IdentifierAction};
 use crate::schema::projects;
 use crate::services::parser::MdParser;
 
 #[derive(Default)]
-struct DataRequest {
-    idn: Option<IdentifierRequest>,
-    file: Option<NamedTempFile>,
-}
-
-#[derive(Default, PartialEq)]
-pub struct IdentifierRequest {
-    pub id: i32,
-    pub action: IdentifierAction
-}
-
-#[derive(Default, PartialEq)]
-pub enum IdentifierAction {
-    #[default]
-    UPDATE,
-    DELETE
+struct ProjectRequest {
+    file: Option<NamedTempFile>
 }
 
 #[derive(Serialize)]
@@ -48,128 +33,77 @@ pub struct ProjectResponse {
 
 const ANNOTATION_LENGTH: usize = 25;
 
-pub async fn handle_projects_action(State(AppState { db }): State<AppState>, mut multipart: Multipart) -> Result<(StatusCode, ()), AppError> {
-    let mut req = DataRequest::default();
-    let mut idn = IdentifierRequest::default();
+pub async fn handle_action(State(AppState { db }): State<AppState>, mut multipart: Multipart) -> Result<(StatusCode, ()), AppError> {
+    let mut db = db.lock().await;
+    let mut expected_fields_with_jobs: HashMap<String, FieldJob<ProjectRequest>> = HashMap::new();
 
-    while let Some(field) = multipart.next_field().await? {
-        let name = match field.name() {
-            Some(name) => name.to_string(),
-            None => return Err(AppError(
-                anyhow!("Field's name is required!"),
-                StatusCode::EXPECTATION_FAILED
-            ))
-        };
+    expected_fields_with_jobs.insert( "file".to_string(),
+        Box::new(|body, bytes| {
+            let mut file = NamedTempFile::new()?;
+            file.write_all(&bytes)?;
+            body.file = Some(file);
+            Ok(())
+        })
+    );
+    let acr: ActionRequest<ProjectRequest> = db.handle_multipart_stream(&mut multipart, &mut expected_fields_with_jobs).await?;
 
-        match name.as_str() {
-            "file" => {
-                let bytes = field.bytes().await?;
-                let mut file = NamedTempFile::new()?;
-                file.write_all(&bytes)?;
-                req.file = Some(file);
-            },
-            _ => {
-                let value = field.text().await?;
-                match name.as_str() {
-                    "id" => idn.id = value.as_str().parse()?,
-                    "action" => idn.action = match value.as_str() {
-                        "update" => IdentifierAction::UPDATE,
-                        "delete" => IdentifierAction::DELETE,
-                        _ => return Err(AppError(
-                            anyhow!("Unexpected action {value}"),
-                            StatusCode::EXPECTATION_FAILED
-                        ))
-                    },
-                    _ => return Err(AppError(
-                        anyhow!("Unexpected field with name {name}"),
-                        StatusCode::EXPECTATION_FAILED
-                    ))
-                }
+    match acr.idr.action {
+        IdentifierAction::UPDATE => {
+            let html = validate_file(&acr.body.file)?;
+            match acr.idr.id {
+               Some(id) => {
+                  diesel::update(FilterDsl::filter(projects::table, projects::id.eq(id)))
+                    .set(projects::html.eq(html))
+                    .execute(&mut db.conn)?;
+               },
+               None => {
+                  db.insert(projects::table, Project { html })?;
+               }
             }
+        },
+        IdentifierAction::DELETE => {
+            let id = match acr.idr.id {
+                Some(id) => id,
+                None => return Err(AppError(
+                    anyhow!("Expected an id for delete purposes!"),
+                    StatusCode::EXPECTATION_FAILED
+                ))
+            };
+            diesel::delete(FilterDsl::filter(projects::table, projects::id.eq(id)))
+                .execute(&mut db.conn)?;
         }
     }
-
-    if idn != IdentifierRequest::default() {
-        req.idn = Some(idn);
-    }
-    handle_action(&db, req)?;
 
     Ok((StatusCode::OK, ()))
 }
 
-pub async fn get_projects(State(AppState { db }): State<AppState>) -> Result<AppDataResponse<Vec<ProjectResponse>>, AppError> {
-    let results: Vec<Result<ProjectResponse, AppError>> = projects::table
-        .select((projects::id, projects::html))
-        .load::<(i32, String)>(&mut db.lock().unwrap().conn)?
-        .into_iter()
-        .map(|(id, html)| Ok( 
-            ProjectResponse { 
-                id, 
-                title: get_content("h1", &html)?,
-                annotation: get_content("p", &html)?,
-                html 
-            })
-        )
-        .collect();
+pub async fn get_unique(State(AppState { db }): State<AppState>, Json(id): Json<String>) -> Result<AppDataResponse<ProjectResponse>, AppError> {
+    let id = id.parse::<i32>()?;
+    let construct_job: ConstructJob<(i32, String), ProjectResponse> = Box::new(|(id, html)| {
+        Ok(ProjectResponse {
+            id,
+            title: get_content("h1", &html)?,
+            annotation: get_content("p", &html)?,
+            html
+        })
+    });
+    let result = db.lock().await.get_unique(projects::table, id, construct_job)?;
 
-    let mut projects: Vec<ProjectResponse> = Vec::with_capacity(results.capacity());
-    for result in results { projects.push(result?); }
-    
-    Ok((
-        StatusCode::OK,
-        Json(projects)
-    ))
+    Ok(result)
 }
 
-pub async fn get_unique_project(State(AppState { db }): State<AppState>, Json(id): Json<String> ) -> Result<AppDataResponse<ProjectResponse>, AppError> {
-    let result: Option<String> = projects::table
-        .find(id.parse::<i32>()?)
-        .select(projects::html)
-        .first::<String>(&mut db.lock().unwrap().conn)
-        .optional()?;
+pub async fn get_all(State(AppState { db }): State<AppState>) -> Result<AppDataResponse<Vec<ProjectResponse>>, AppError> {
+    let construct_job: ConstructJob<(i32, String), ProjectResponse> = Box::new(|(id, html)| {
+        Ok(ProjectResponse {
+            id,
+            title: get_content("h1", &html)?,
+            annotation: get_content("p", &html)?,
+            html
+        })
+    }); 
+    let result = db.lock().await.get_all(projects::table, construct_job)?;
 
-    match result {
-        Some(html) => Ok((
-            StatusCode::OK,
-            Json(ProjectResponse {
-                id: id.as_str().parse()?,
-                title: get_content("h1", &html)?,
-                annotation: get_content("p", &html)?,
-                html
-            })
-        )),
-        None => Err(AppError(
-            anyhow!("Unable to find project with id: {id}"),
-            StatusCode::NOT_FOUND
-        ))
-        
-    }
-}
-
-fn handle_action(db: &Arc<Mutex<Database>>, body: DataRequest) -> Result<(), AppError> {
-    let conn: &mut PgConnection = &mut db.lock().unwrap().conn;
-    match body.idn {
-        Some(idn) => match idn.action {
-            IdentifierAction::UPDATE => {
-                let html = validate_file(&body.file)?;
-                diesel::update(FilterDsl::filter(projects::table, projects::id.eq(idn.id)))
-                    .set(projects::html.eq(html))
-                    .execute(conn)?;
-            },
-            IdentifierAction::DELETE => {
-                diesel::delete(FilterDsl::filter(projects::table, projects::id.eq(idn.id)))
-                    .execute(conn)?;
-            }
-        },
-        None => {
-            let html = validate_file(&body.file)?;
-            diesel::insert_into(projects::table)
-                .values(&Project { html })
-                .execute(conn)?;
-        }
-    }
-
-    Ok(())
+    Ok(result)
 }
 
 fn validate_file(file: &Option<NamedTempFile>) -> Result<String, AppError> {
@@ -189,7 +123,7 @@ fn validate_file(file: &Option<NamedTempFile>) -> Result<String, AppError> {
 
             Ok(html)
         },
-        None => return Err(AppError(
+        None => Err(AppError(
             anyhow!("File is required for creating or updating purposes!"),
             StatusCode::EXPECTATION_FAILED
         ))

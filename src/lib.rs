@@ -1,7 +1,8 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use axum::Json;
 use axum::http::StatusCode;
 use repository::db::Database;
+use tokio::sync::Mutex;
 
 pub mod models;
 pub mod repository;

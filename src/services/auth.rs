@@ -83,7 +83,7 @@ pub async fn handle_login_auth(State(AppState { db }): State<AppState>, Json(Log
     let (id, content, expires) = diesel::insert_into(tokens::table)
         .values(&token)
         .returning((tokens::id, tokens::content, tokens::expires))
-        .get_result::<(i32, String, NaiveDateTime)>(&mut db.lock().unwrap().conn)?;
+        .get_result::<(i32, String, NaiveDateTime)>(&mut db.lock().await.conn)?;
         
     Ok((
         StatusCode::CREATED,
@@ -99,7 +99,7 @@ pub async fn verify_token(State(AppState { db }): State<AppState>, Json(TokenVal
     let token: Option<String> = tokens::table
         .find(id)
         .select(tokens::content)
-        .first::<String>(&mut db.lock().unwrap().conn)
+        .first::<String>(&mut db.lock().await.conn)
         .optional()?;
 
     match token {
@@ -122,7 +122,7 @@ pub async fn verify_token(State(AppState { db }): State<AppState>, Json(TokenVal
 pub async fn handle_tokens_expiration(State(AppState { db }): State<AppState>) -> Result<(StatusCode, ()), AppError> {
     let tokens: Vec<(i32, NaiveDateTime)> = tokens::table
         .select((tokens::id, tokens::expires))
-        .load(&mut db.lock().unwrap().conn)?;
+        .load(&mut db.lock().await.conn)?;
     
     let mut handles: Vec<TokenExpirationHandler<usize>> = Vec::with_capacity(tokens.capacity());
     if tokens.len() > 0 {
@@ -137,7 +137,7 @@ pub async fn handle_tokens_expiration(State(AppState { db }): State<AppState>) -
                 handles.push(tokio::task::spawn(async move {
                     timer.await;
                     diesel::delete(FilterDsl::filter(tokens::table, tokens::id.eq(id)))
-                        .execute(&mut db.lock().unwrap().conn)
+                        .execute(&mut db.lock().await.conn)
                         .map_err(|e| AppError(anyhow!("Could not delete token {id}: {e}"), StatusCode::EXPECTATION_FAILED))
                 }))
             }

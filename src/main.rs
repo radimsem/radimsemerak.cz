@@ -1,15 +1,16 @@
 use std::env;
-use std::sync::{Arc, Mutex};
 use std::error::Error;
+use std::sync::Arc;
 
 use axum::Router;
 use axum::routing::{post, get};
 use dotenv::dotenv;
+use tokio::sync::Mutex;
 
 use semerak::AppState;
 use semerak::repository::db::Database;
-use semerak::services::projects::{get_projects, get_unique_project, handle_projects_action};
-use semerak::services::auth::{handle_tokens_expiration, handle_login_auth, verify_token};
+use semerak::services::auth;
+use semerak::services::projects;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -21,12 +22,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let state = AppState { db: Arc::new(Mutex::new(db)) };
     let app: Router = Router::new()
-        .route("/api/login", post(handle_login_auth))
-        .route("/api/verify", post(verify_token))
-        .route("/api/projects/action", post(handle_projects_action))
-        .route("/api/projects/unique", post(get_unique_project))
-        .route("/api/projects/all", get(get_projects))
-        .route("/api/expires", get(handle_tokens_expiration))
+        .route("/api/login", post(auth::handle_login_auth))
+        .route("/api/verify", post(auth::verify_token))
+        .route("/api/projects/action", post(projects::handle_action))
+        .route("/api/projects/unique", post(projects::get_unique))
+        .route("/api/projects/all", get(projects::get_all))
+        .route("/api/expires", get(auth::handle_tokens_expiration))
         .with_state(state);
     
     let listener = tokio::net::TcpListener::bind(

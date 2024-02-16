@@ -1,26 +1,23 @@
 use std::env;
+use diesel::{Connection, PgConnection};
 use std::collections::HashMap;
 
 use anyhow::anyhow;
+use axum::extract::Multipart;
 use axum::Json;
 use axum::http::StatusCode;
-use axum::extract::{multipart::Field, Multipart};
-use diesel::{Connection, PgConnection, QueryableByName, RunQueryDsl};
-use diesel::query_dsl::methods::{FindDsl, LoadQuery};
+use diesel::query_builder::InsertStatement;
+use diesel::{Insertable, RunQueryDsl, Table};
+use diesel::query_dsl::methods::{ExecuteDsl, FindDsl, LoadQuery};
 use diesel::pg::Pg;
 
 use crate::AppDataResponse;
-use crate::repository::{is_default, complete_db_uri};
 use crate::error::AppError;
-use crate::services::projects::{IdentifierRequest, IdentifierAction};
+use crate::repository::{ActionRequest, IdentifierRequest, IdentifierAction, FieldJob, ConstructJob};
+use crate::repository::complete_db_uri;
 
 pub struct Database {
     pub conn: PgConnection
-}
-
-pub struct ActionRequest<T: Default> {
-    body: T,
-    idr: IdentifierRequest 
 }
 
 impl Database {
@@ -31,78 +28,72 @@ impl Database {
         Ok(Self { conn })
     }
 
-    pub async fn handle_stream<T: Default>(mut multipart: Multipart, expected_fields_with_jobs: HashMap<String, impl Fn(&mut T, &Field<'_>)>) -> Result<ActionRequest<T>, AppError> {
+    pub async fn handle_multipart_stream<T: Default>(&self, multipart: &mut Multipart, expected_fields_with_jobs: &mut HashMap<String, FieldJob<T>>) -> Result<ActionRequest<T>, AppError> {
         let mut acr = ActionRequest {
             body: T::default(),
             idr: IdentifierRequest::default()
         };
 
         while let Some(field) = multipart.next_field().await? {
-           let name = match field.name() {
-              Some(val) => val.to_string(),
-              None => return Err(AppError(
-                anyhow!("Field's name is required!"),
-                StatusCode::EXPECTATION_FAILED
-              )) 
-           }; 
-
-           if expected_fields_with_jobs.contains_key(&name) {
-              match expected_fields_with_jobs.get(&name) {
-                  Some(job) => job(&mut acr.body, &field),
-                  None => return Err(AppError(
-                    anyhow!("Expected field does not have a job!"),
+            let name = match field.name() {
+                Some(val) => val.to_string(),
+                None => return Err(AppError(
+                    anyhow!("Field's name is required!"),
                     StatusCode::EXPECTATION_FAILED
-                  ))
-              }
-           } else {
-              let value = field.text().await?;
-              match name.as_str() {
-                 "id" => acr.idr.id = value.as_str().parse()?,
-                 "action" => acr.idr.action = match value.as_str() {
-                    "update" => IdentifierAction::UPDATE,
-                    "delete" => IdentifierAction::DELETE,
-                    _ => return Err(AppError(
-                        anyhow!("Unexpected action {value}"),
+                )) 
+            };
+
+            if expected_fields_with_jobs.contains_key(&name) {
+                let bytes = field.bytes().await?;
+                match expected_fields_with_jobs.remove(&name) {
+                    Some(job) => job(&mut acr.body, &bytes)?,
+                    None => return Err(AppError(
+                        anyhow!("Expected field does not have a job!"),
                         StatusCode::EXPECTATION_FAILED
                     ))
-                 },
-                 _ => return Err(AppError(
-                    anyhow!("Unexpected field with name {name}!"),
-                    StatusCode::EXPECTATION_FAILED
-                 ))
-              }
-           } 
+                }
+            } else {
+                let text = field.text().await?;
+                match name.as_str() {
+                    "id" => acr.idr.id = Some(text.as_str().parse()?),
+                    "action" => acr.idr.action = match text.as_str() {
+                        "update" => IdentifierAction::UPDATE,
+                        "delete" => IdentifierAction::DELETE,
+                        _ => return Err(AppError(
+                            anyhow!("Unexpected action {text}"),
+                            StatusCode::EXPECTATION_FAILED
+                        ))
+                    },
+                    _ => return Err(AppError(
+                        anyhow!("Unexpected field with name {name}!"),
+                        StatusCode::EXPECTATION_FAILED
+                    ))
+                }
+            }
         }
-
-        Ok(acr)
+        Ok(acr) 
     }
-
-    pub fn handle_action<T: Default>(&self, acr: ActionRequest<T>) -> anyhow::Result<()> { 
-        if !is_default(&acr.idr) {
-           match acr.idr.action {
-               IdentifierAction::UPDATE => {
-                  //TODO Generic update
-               },
-               IdentifierAction::DELETE => {
-                  //TODO Generic delete
-               }
-           } 
-        } else {
-            //TODO Generic insert
-        }
-        
-        Ok(())
-    }
-
-    pub fn get_unique<'a, T, U>(&mut self, table: T, id: i32, construct_job: impl Fn(U) -> Result<U, AppError>) -> Result<AppDataResponse<U>, AppError>
+    
+    pub fn insert<T, U>(&mut self, table: T, records: U) -> anyhow::Result<()>
     where
-        T: FindDsl<i32>,
-        <T as FindDsl<i32>>::Output: LoadQuery<'a, PgConnection, U>,
-        U: QueryableByName<Pg>
+        T: Table,
+        U: Insertable<T>,
+        InsertStatement<T, <U as Insertable<T>>::Values>: ExecuteDsl<PgConnection>
+    {
+        diesel::insert_into(table)
+            .values(records)
+            .execute(&mut self.conn)?;
+        Ok(()) 
+    }
+
+    pub fn get_unique<'a, T, U, V, PK>(&mut self, table: T, id: PK, construct_job: ConstructJob<U, V>) -> Result<AppDataResponse<V>, AppError>
+    where
+        T: FindDsl<PK>,
+        <T as FindDsl<PK>>::Output: LoadQuery<'a, PgConnection, U>
     {
         let result: U = table
             .find(id)
-            .load(&mut self.conn)?
+            .load::<U>(&mut self.conn)?
             .remove(usize::default());
 
         Ok((
@@ -111,13 +102,13 @@ impl Database {
         ))
     }
 
-    pub fn get_all<'a, T, U, V>(&mut self, table: T, construct_job: impl Fn(U) -> Result<V, AppError>) -> Result<AppDataResponse<Vec<V>>, AppError>
+    pub fn get_all<'a, T, U, V>(&mut self, table: T, construct_job: ConstructJob<U, V>) -> Result<AppDataResponse<Vec<V>>, AppError>
     where
         T: RunQueryDsl<Pg>,
         T: LoadQuery<'a, PgConnection, U>,
-        U: QueryableByName<Pg>
     {
-        let results: Vec<Result<V, AppError>> = table.load::<U>(&mut self.conn)?
+        let results: Vec<Result<V, AppError>> = table
+           .load::<U>(&mut self.conn)?
            .into_iter()
            .map(|item: U| construct_job(item))
            .collect();
@@ -132,5 +123,4 @@ impl Database {
             Json(items)
         ))
     }
-
 }
