@@ -19,6 +19,9 @@
     .heading {
         @apply font-semibold text-slate-200
     }
+    .contact-option {
+        @apply flex justify-center items-center w-14 h-14 bg-[rgb(32,39,55)] rounded-full transition-colors
+    }
 
     .admin-input {
         @apply w-full px-3 py-2.5 text-slate-300 bg-[rgb(18,24,27)] bg-opacity-75 placeholder:text-slate-500 rounded-[.5rem] outline-none transition-colors focus:bg-opacity-100
@@ -40,6 +43,26 @@ p {
 
 p a {
     @apply text-sky-500 underline
+}
+
+p > code {
+    @apply text-sm px-2 py-1.5 rounded-[.5rem] bg-[#1d1f21]
+}
+
+a code {
+    @apply font-sans
+}
+
+.project-content h1 {
+    @apply text-2xl font-semibold text-slate-100
+}
+
+.project-content h2 {
+    @apply text-xl font-semibold text-slate-200
+}
+
+.project-content > pre {
+    @apply text-sm overflow-x-auto p-4 rounded-[.5rem] bg-[#1d1f21]
 }
 
 .highlight {

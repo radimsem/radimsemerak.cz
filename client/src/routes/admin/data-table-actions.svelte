@@ -40,8 +40,8 @@
                 </Button>
             </Dialog.Trigger>
         <Dialog.Content class="text-slate-300 bg-[#12181b] border border-slate-700 !rounded-xl z-[100]">
-            <Dialog.Header class="space-y-5">
-                <Dialog.Title class="text-start">Do you want to delete project {assets.title}?</Dialog.Title>
+            <Dialog.Header class="flex flex-col items-start space-y-5">
+                <Dialog.Title class="font-normal text-start leading-6">Do you want to delete project {assets.title}?</Dialog.Title>
                 <form 
                     method="post" 
                     action="/admin/projects"

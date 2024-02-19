@@ -149,10 +149,13 @@ fn get_content(tag: &str, html: &String) -> Result<String, AppError> {
     let mut content = html[start..end].to_string();
 
     if tag == "p" {
-        if content.len() > ANNOTATION_LENGTH {
-            let idx: Option<usize> = content.as_bytes()[ANNOTATION_LENGTH..].iter().position(|x: &u8| *x as char == ' '); 
+        if content.len() >= ANNOTATION_LENGTH {
+            let idx: Option<usize> = content[ANNOTATION_LENGTH..]
+                .as_bytes()
+                .iter()
+                .position(|x: &u8| *x as char == ' '); 
             if let Some(val) = idx {
-                content = String::from(&content[0..val]);
+                content = String::from(&content[0..(ANNOTATION_LENGTH + val)]);
             }
         }
         content.push_str("...");
