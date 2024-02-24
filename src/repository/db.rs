@@ -33,9 +33,9 @@ pub mod methods {
     use crate::repository::{ActionRequest, IdentifierRequest, IdentifierAction, FieldJob, ConstructJob};
 
     pub async fn handle_multipart_stream<T: Default>(multipart: &mut Multipart, expected_fields_with_jobs: &mut HashMap<String, FieldJob<T>>) -> Result<ActionRequest<T>, AppError> {
-        let mut acr = ActionRequest {
+        let mut action_req = ActionRequest {
             body: T::default(),
-            idr: IdentifierRequest::default()
+            ident_req: IdentifierRequest::default()
         };
 
         while let Some(field) = multipart.next_field().await? {
@@ -52,7 +52,7 @@ pub mod methods {
                 match expected_fields_with_jobs.remove(&name) {
                     Some(job) => {
                         let job = job.lock().await;
-                        job(&mut acr.body, &bytes)?;
+                        job(&mut action_req.body, &bytes)?;
                     },
                     None => return Err(AppError(
                         anyhow!("Expected field does not have a job!"),
@@ -62,8 +62,8 @@ pub mod methods {
             } else {
                 let text = field.text().await?;
                 match name.as_str() {
-                    "id" => acr.idr.id = Some(text.as_str().parse()?),
-                    "action" => acr.idr.action = match text.as_str() {
+                    "id" => action_req.ident_req.id = Some(text.as_str().parse()?),
+                    "action" => action_req.ident_req.action = match text.as_str() {
                         "update" => IdentifierAction::UPDATE,
                         "delete" => IdentifierAction::DELETE,
                         _ => return Err(AppError(
@@ -78,7 +78,7 @@ pub mod methods {
                 }
             }
         }
-        Ok(acr) 
+        Ok(action_req) 
     }
     
     pub fn insert<T, U>(table: T, records: U, conn: &mut PgConnection) -> anyhow::Result<()>

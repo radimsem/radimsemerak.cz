@@ -48,12 +48,12 @@ pub async fn handle_action(State(AppState { db }): State<AppState>, mut multipar
             Ok(())
         })))
     );
-    let acr: ActionRequest<ProjectRequest> = db::methods::handle_multipart_stream(&mut multipart, &mut expected_fields_with_jobs).await?;
+    let action_req: ActionRequest<ProjectRequest> = db::methods::handle_multipart_stream(&mut multipart, &mut expected_fields_with_jobs).await?;
 
-    match acr.idr.action {
+    match action_req.ident_req.action {
         IdentifierAction::UPDATE => {
-            let html = validate_file(&acr.body.file)?;
-            match acr.idr.id {
+            let html = validate_file(&action_req.body.file)?;
+            match action_req.ident_req.id {
                Some(id) => {
                   diesel::update(FilterDsl::filter(projects::table, projects::id.eq(id)))
                     .set(projects::html.eq(html))
@@ -69,7 +69,7 @@ pub async fn handle_action(State(AppState { db }): State<AppState>, mut multipar
             }
         },
         IdentifierAction::DELETE => {
-            let id = match acr.idr.id {
+            let id = match action_req.ident_req.id {
                 Some(id) => id,
                 None => return Err(AppError(
                     anyhow!("Expected an id for delete purposes!"),
@@ -131,8 +131,15 @@ fn validate_file(file: &Option<NamedTempFile>) -> Result<String, AppError> {
                     StatusCode::NOT_ACCEPTABLE
                 ))
             }
-            let html = MdParser::generate::<PathBuf>(&path)?;
 
+            if !path.ends_with(".md") {
+               return Err(AppError(
+                    anyhow!("File is not a Markdown file!"),
+                    StatusCode::EXPECTATION_FAILED
+               )) 
+            }
+
+            let html = MdParser::generate::<PathBuf>(&path)?;
             Ok(html)
         },
         None => Err(AppError(
@@ -153,7 +160,8 @@ fn get_content(tag: &str, html: &String) -> Result<String, AppError> {
             let idx: Option<usize> = content[ANNOTATION_LENGTH..]
                 .as_bytes()
                 .iter()
-                .position(|x: &u8| *x as char == ' '); 
+                .position(|x: &u8| *x as char == ' ');
+
             if let Some(val) = idx {
                 content = String::from(&content[0..(ANNOTATION_LENGTH + val)]);
             }

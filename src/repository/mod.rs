@@ -10,7 +10,7 @@ pub mod db;
 
 pub struct ActionRequest<T: Default> {
     pub body: T,
-    pub idr: IdentifierRequest 
+    pub ident_req: IdentifierRequest 
 }
 
 #[derive(Default, PartialEq)]

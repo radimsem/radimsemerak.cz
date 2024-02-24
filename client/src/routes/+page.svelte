@@ -20,11 +20,11 @@
 
 	<main class="w-full min-h-screen pb-10">
 		<section class="space-y-10 lg:space-y-20">
-			{#if data.projects && data.obfuscHandler}
+			{#if data.projects}
 				<Hero />
 				<Experience />
 				<Projects data={data.projects}/>
-				<Contact obfuscHandler={data.obfuscHandler} />
+				<Contact />
 			{:else}
 				{data.err}
 			{/if}

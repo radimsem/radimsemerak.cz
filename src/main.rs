@@ -11,7 +11,6 @@ use semerak::AppState;
 use semerak::repository::db::Database;
 use semerak::services::auth;
 use semerak::services::projects;
-use semerak::services::obfusc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -27,7 +26,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .route("/api/verify", post(auth::verify_token))
         .route("/api/projects/action", post(projects::handle_action))
         .route("/api/projects/unique", post(projects::get_unique))
-        .route("/api/obfusc", post(obfusc::handle_obfuscation))
         .route("/api/projects/all", get(projects::get_all))
         .route("/api/expires", get(auth::handle_tokens_expiration))
         .with_state(state);

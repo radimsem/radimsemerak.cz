@@ -30,6 +30,7 @@
 		"@material/web": "^1.1.1",
 		"bits-ui": "^0.13.2",
 		"clsx": "^2.1.0",
+		"html-entities": "^2.4.0",
 		"radix-icons-svelte": "^1.2.1",
 		"tailwind-merge": "^2.2.0",
 		"tailwind-variants": "^0.1.20",
