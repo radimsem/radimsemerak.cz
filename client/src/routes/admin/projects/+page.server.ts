@@ -10,9 +10,9 @@ export const actions: Actions = {
         });
 
         if (!res.ok) {
-            return { err: await res.text() }
+            return { err: await res.text() };
         }
-        
+ 
         redirect(301, "/admin");
     }
 };

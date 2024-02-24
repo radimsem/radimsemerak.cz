@@ -131,15 +131,8 @@ fn validate_file(file: &Option<NamedTempFile>) -> Result<String, AppError> {
                     StatusCode::NOT_ACCEPTABLE
                 ))
             }
-
-            if !path.ends_with(".md") {
-               return Err(AppError(
-                    anyhow!("File is not a Markdown file!"),
-                    StatusCode::EXPECTATION_FAILED
-               )) 
-            }
-
             let html = MdParser::generate::<PathBuf>(&path)?;
+
             Ok(html)
         },
         None => Err(AppError(
