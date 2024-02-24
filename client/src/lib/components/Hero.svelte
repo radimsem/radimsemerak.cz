@@ -66,8 +66,8 @@
                         </td>
                         <td>
                             <span class="icon-text">
-                                <Icon icon="logos:svelte-icon" width="28" height="28" />
-                                SvelteKit
+                                <Icon icon="skill-icons:htmx-dark" width="28" height="28" />
+                                htmx
                             </span>
                         </td>
                     </tr>
@@ -87,8 +87,8 @@
                         </td>
                         <td>
                             <span class="icon-text">
-                                <Icon icon="vscode-icons:file-type-rust" width="32" height="32" />
-                                Rust
+                                <Icon icon="logos:go" width="28" height="28" />
+                                Go
                             </span>
                         </td>
                     </tr>

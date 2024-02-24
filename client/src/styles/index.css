@@ -14,13 +14,10 @@
         @apply space-y-8 lg:px-[10%] xl:px-[15%]
     }
     .icon-text {
-        @apply flex flex-row items-center gap-1.5
+        @apply flex flex-row items-center gap-2
     }
     .heading {
         @apply font-semibold text-slate-200
-    }
-    .contact-option {
-        @apply flex justify-center items-center w-14 h-14 bg-[rgb(32,39,55)] rounded-full transition-colors
     }
 
     .admin-input {
@@ -40,8 +37,10 @@
 p {
     @apply leading-relaxed
 }
-
-p a {
+ 
+p a,
+.contact-options a 
+{
     @apply text-sky-500 underline
 }
 
